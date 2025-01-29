@@ -13,6 +13,32 @@
 
 #------------------------------------------------
 
+function data_simulator(Good_Pix, F::Vector{FieldTransformOperator}, A::Mapping, S::PolarimetricMap; ro_noise=8.5)
+   
+    M=zeros(size(Good_Pix)[1],size(Good_Pix)[2],length(F))
+    CS=direct_model!(M,S,F,A);
+    
+    VAR=max.(M,zero(eltype(M))) .+ro_noise^2
+	W=Good_Pix ./ VAR
+	D=data_generator(M, W)
+	
+	return D,W,CS
+end
+
+
+function direct_model!(M::AbstractArray{T,3},
+                        S::PolarimetricMap, 
+                        A::Mapping, 
+                        F::Vector{FieldTransformOperator}) where {T<:AbstractFloat}
+    
+    CS = PolarimetricMap("stokes", A*S.I,A*S.Q, A*S.U);
+    for k=1:length(F)	    
+	    M[:,:,k] .= F[k] * cat(CS.I, CS.Q, CS.U, dims=3);	    
+	end
+    return CS
+end
+    
+
 function data_generator(model::AbstractArray{T,N}, weights::AbstractArray{T,N};bad=zero(T)) where {T<:AbstractFloat,N}   
     #seed === nothing ||  Random.seed!(seed);
     
@@ -29,91 +55,17 @@ function data_generator(model::AbstractArray{T,N}, weights::AbstractArray{T,N};b
     return data
 end
 
-function generate_model(S::PolarimetricMap, A::Mapping)
-    @assert size(S) == get_par().cols[1:2];
-    
-    M=Array{Float64,3}(undef, get_par().rows[1], 
-                              get_par().rows[2], 
-                              get_par().dataset_length)
+function generate_parameters(parameters::ObjectParameters, tau::Float64)
+	Ip=zeros(parameters.size);
+	Iu=zeros(parameters.size);
+	θ=zeros(parameters.size);
+	STAR1=zeros(parameters.size);
+	STAR2=zeros(parameters.size);
 	
-	ker= LinearInterpolators.CatmullRomSpline(Float64, LinearInterpolators.Flat)    
-    for k=1:get_par().dataset_length
-        output_size=(get_par().rows[1], Int64(get_par().rows[2]/2));
-        input_size= get_par().cols[1:2];
-    	T1=TwoDimensionalTransformInterpolator(output_size, 
-    	                                       input_size, 
-    	                                       ker, 
-    	                                       ker, 
-    	                                       Trans_Table[k][1])
-    	T2=TwoDimensionalTransformInterpolator(output_size, 
-    	                                       input_size, 
-    	                                       ker, 
-    	                                       ker, 
-    	                                       Trans_Table[k][2])
-	    
-	    F=FieldTransformOperator(get_par().cols, 
-	                                        get_par().rows, 
-	                                        get_par().v[k][1],
-	                                        get_par().v[k][2],
-	                                        T1,
-	                                        T2)
-	    
-	    M[:,:,k].=F * cat(A*S.I, A*S.Q, A*S.U, dims=3);	    
-	end
-    return M
-end
-    
-function data_simulator(Good_Pix, tau, A::Mapping; ro_noise=8.5)
-    map_size=get_par().cols[1:2];
-    
-    S = generate_parameters(map_size, tau);
-
-    M=generate_model(S,A);
-    
-    VAR=max.(M,zero(eltype(M))) .+ro_noise^2
-	W=Good_Pix ./ VAR
-	D=data_generator(M, W)
-	
-	check_MSE(M,D,W);
-	
-    CS=PolarimetricMap("stokes", A*S.I, A*S.Q, A*S.U)
-	return D,W,S,CS
-end
-
-function data_simulator(Good_Pix, A::Mapping, S::PolarimetricMap; ro_noise=8.5)
-    if size(S) != get_par().cols[1:2]
-        @warn "Size of the Polarimetric Map is different from the one that I know, it will be padded."
-        S=pad(S);
-    end
-   
-    M=generate_model(S,A);
-    
-    VAR=max.(M,zero(eltype(M))) .+ro_noise^2
-	W=Good_Pix ./ VAR
-	D=data_generator(M, W)
-	
-	check_MSE(M,D,W);
-    CS=PolarimetricMap("stokes", A*S.I, A*S.Q, A*S.U)
-	return D,W,CS
-end
-
-function check_MSE(model, data, weights)
-	MSE = vdot(data-model, weights.*(data-model)) ;
-	N=count(weights .> 0);
-	println("MSE=$MSE, N=$N, MSE/N=$(MSE/N)");
-end
-
-function generate_parameters(map_size, tau)
-	Ip=zeros(map_size);
-	Iu=zeros(map_size);
-	θ=zeros(map_size);
-	STAR1=zeros(map_size);
-	STAR2=zeros(map_size);
-	
-	for i=1:map_size[1]
-    	for j=1:map_size[2]
-    		r1=(map_size[1]+1)/2-i;
-    		r2=(map_size[2]+1)/2-j;
+	for i=1:parameters.size[1]
+    	for j=1:parameters.size[2]
+    		r1=parameters.center[1]-i;
+    		r2=parameters.center[2]-j;
     		if (r1^2+r2^2<=20^2)
         		Iu[i,j]=1000;
         		Ip[i,j]=tau*Iu[i,j]/(1-tau);
@@ -126,23 +78,23 @@ function generate_parameters(map_size, tau)
         		Iu[i,j]=1000;
         		Ip[i,j]=tau*Iu[i,j]/(1-tau);
     		end
-    		θ[i,map_size[2]+1-j]=atan(j-map_size[2]/2,i-map_size[1]/2);
-			STAR1[i,j]=200*exp(-((i-map_size[1]/2)^2+(j-map_size[2]/2)^2)/(2*75^2))
-			STAR2[i,j]=100000*exp(-((i-map_size[1]/2)^2+(j-map_size[2]/2)^2)/(2*7^2))
-			if ((((map_size[1]+1)/2-i)^2+((map_size[2]+1)/2-j)^2)<=10^2)
+    		θ[i,parameters.size[2]+1-j]=atan(j-parameters.center[2],i-parameters.center[1]);
+			STAR1[i,j]=200*exp(-((i-parameters.center[1])^2+(j-parameters.center[2])^2)/(2*75^2))
+			STAR2[i,j]=100000*exp(-((i-parameters.center[1])^2+(j-parameters.center[2])^2)/(2*7^2))
+			if (((parameters.center[1]-i)^2+(parameters.center[2]-j)^2)<=10^2)
         		STAR2[i,j]=800;
         		Iu[i,j]=0;
         		Ip[i,j]=0;	
     		end
-			if ((((map_size[1]+1)/2-i)^2+((map_size[2]+1)/2-j)^2)<=70^2)
+			if (((parameters.center[1]-i)^2+(parameters.center[2]-j)^2)<=70^2)
         		STAR1[i,j]=50;		
     		end
 		end
 	end    
 	θ=θ.*(Ip.!=0);
 	STAR=STAR1+STAR2
-	STAR[round(Int64,10*map_size[1]/16)-3,round(Int64,10*map_size[2]/16)]=20000.0;
-	STAR[round(Int64,10*map_size[1]/16),round(Int64,10*map_size[2]/16)-3]=100000.0;
+	STAR[round(Int64,10*parameters.size[1]/16)-3,round(Int64,10*parameters.size[2]/16)]=20000.0;
+	STAR[round(Int64,10*parameters.size[1]/16),round(Int64,10*parameters.size[2]/16)-3]=100000.0;
 
     return PolarimetricMap("intensities", Iu+STAR, Ip, θ);
 end

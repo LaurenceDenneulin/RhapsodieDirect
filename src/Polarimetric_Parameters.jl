@@ -339,10 +339,9 @@ where X is a PolarimetricMap, write a fitsfile
 function write(X::PolarimetricMap, filename::AbstractString)
     data=cat(X.Iu', X.Ip', X.θ', X.I', X.Q', X.U',dims=3)
  
-    writefits(filename,
+    writefits!(filename,
               ["MAPORDER" => "Iu, Ip, Theta, I, Q, U"],
-              data,
-              overwrite=true)
+              data)
 end
 
 """

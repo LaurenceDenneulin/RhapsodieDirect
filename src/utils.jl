@@ -1,5 +1,5 @@
 #
-# grad_tools.jl
+# utils.jl
 #
 # Provide tools to load the instrumental parameters and the 
 # calibrated data, and for the calculus of the RHAPSODIE data fidelity term. 
@@ -9,121 +9,78 @@
 # This file is part of Rhapsodie
 #
 #
-# Copyright (c) 2017-2021 Laurence Denneulin (see LICENCE.md)
+# Copyright (c) 2017-2025 Laurence Denneulin (see LICENCE.md)
 #
 
 #------------------------------------------------
+"""
+Return the a table of indices of size 4 by N where 4 is the number of position of half wave plate (HWP) and N is the product of the number of half wave plate cycles and the number of frame per position of HWP in one cycle. For example, for a dataset with two cycles and 2 frames per position of HWP, returns:
 
-const ImageInterpolator{T<:AbstractFloat, K<:Kernel{T}} = TwoDimensionalTransformInterpolator{T,K,K}
-const MyKer = LinearInterpolators.CatmullRomSpline(Float64, LinearInterpolators.Flat)
-#const MyKer = LinearInterpolators.RectangularSpline(Float64, LinearInterpolators.Flat)
-#const MyKer = LinearInterpolators.LinearSpline(Float64, LinearInterpolators.Flat)
+1 2  9 10
+3 4 11 12
+5 6 13 14
+7 8 15 16
 
-struct parameters_table{T<: AbstractFloat}
-     cols::NTuple{3,Int64} #Imput size (reconstruction)
-     rows::NTuple{2,Int64} #Output size (data)
-     dataset_length::Int64
-     Nframe::Int64
-     Nrot::Int64
-     Nangle::Int64
-     v::Vector{NTuple{2, NTuple{3, T}}}
-     indices::Array{Int64,2}
-     center::Array{T,1}
-     psf_center::NTuple{2,Array{T,1}}
-     epsilon::Vector{NTuple{2,Array{T,1}}} 
-     derotang::Vector{T}
-end
+It is usefull to generate default polarisation values and to apply the Double Difference and Double Ratio.
+""" get_indices_table
 
-
-const Trans_Table = Vector{NTuple{2,AffineTransform2D}}(); #Contains all the affine transform used 
-const Parameters = parameters_table[];
-get_par()::parameters_table = Parameters[1];
-const dataset = data_table[];
-
-const PSF_save = Vector{Array{Float64,2}}();
-get_PSF()=PSF_save[1];
-const EPSILON_save = Array{Float64,1}(undef,1);
-function set_epsilon(epsilon)
-    EPSILON_save[1]=epsilon
-end
-get_epsilon()::Float64=EPSILON_save[1];
-const PRECOND_SAVE= Vector{Any}();
-U()=PRECOND_SAVE[1];
-
-const MASK_save = Vector{Array{Float64,2}}();
-get_MASK()=MASK_save[1];
-
-
-function Indices(S::Int64,Nrot::Int64,Nframe::Int64)
-#S = le nombre total de frame gauche ou droite
-#Nrot : Nombre de positions du derotateur
-#Nframe : Nombre de frame par positions de la lame demi-onde
-	
-	Nangle=Int32.(S/(Nframe*4)) #Nombre de rotations de la lame demi-onde
-	INDICES=zeros(4,Nframe*Nangle)
+function get_indices_table(d::DatasetParameters)	
+	indices=zeros(4,d.frames_per_hwp_pos*d.hwp_cycles)
 	for i=1:4
-		ind=repeat(range(0,stop=4*Nframe*(Nangle-1),length=Nangle), inner=Nframe)+(Nframe*i .-mod.(range(1,stop=Nframe*Nangle,length=Nframe*Nangle),Nframe))
-		INDICES[i,:]=ind
+		ind=repeat(range(0,
+		                 stop=4*d.frames_per_hwp_pos*(d.hwp_cycles-1),
+		                 length=d.hwp_cycles), inner=d.frames_per_hwp_pos) +         
+		    (d.frames_per_hwp_pos*i .-mod.(range(1,
+		                                         stop=d.frames_per_hwp_pos*d.hwp_cycles,
+		                                         length=d.frames_per_hwp_pos*d.hwp_cycles),
+		                                    d.frames_per_hwp_pos))
+		indices[i,:]=ind
 	end
-	INDICES=round.(Int64, INDICES);
-	return INDICES
+	indices=Int64.(indices)
+	return indices
 end
 
+"""
 
-function Set_Vi(Indices::AbstractArray{Int64,2}; alpha=[0, pi/4, pi/8, 3*pi/8], psi=[0,pi/2])
+""" set_default_polarisation_coefficients
+function set_default_polarisation_coefficients(indices::AbstractArray{Int64,2}; alpha=[0, pi/4, pi/8, 3*pi/8], psi=[0,pi/2])
 	J(a)=[cos(2*a) sin(2*a); sin(2*a) -cos(2*a)]
 	P(a)=[cos(a), -sin(a)]
-    v=Vector{NTuple{2, NTuple{3, Float64}}}(undef, length(Indices));
+    v=Vector{NTuple{2, NTuple{3, Float64}}}(undef, length(indices));
 	for i=1:4
 		v1=J(alpha[i])*P(psi[1])
-		vn1=norm(v1)^2;
+		vn1=v1[1]*v1[1]+v1[2]*v1[2]
 		v2=J(alpha[i])*P(psi[2])
-		vn2=norm(v2)^2;
-		for k=1:length(Indices[i,:])		
-		v[Indices[i,k]] =((round(vn1/2, digits=4), round((abs(v1[1])^2-abs(v1[2])^2)/2, digits=4), round(real(v1[1]*v1[2]), digits=4)),
-		                  (round(vn2/2, digits=4), round((abs(v2[1])^2-abs(v2[2])^2)/2, digits=4), round(real(v2[1]*v2[2]), digits=4)));
+		vn2=v2[1]*v2[1]+v2[2]*v2[2]
+		for k=1:length(indices[i,:])		
+		v[indices[i,k]] =((round(vn1/2, digits=4), 
+		                   round((abs(v1[1])^2-abs(v1[2])^2)/2, digits=4), 
+		                   round(real(v1[1]*v1[2]), digits=4)),
+		                  (round(vn2/2, digits=4), 
+		                  round((abs(v2[1])^2-abs(v2[2])^2)/2, digits=4), 
+		                  round(real(v2[1]*v2[2]), digits=4)));
         end
 	end
 	return v
 end
 
-function Set_Vi(Nframe::Int, dataset_length::Int, mueller_instru::AbstractArray{Float64,2})
-    @assert dataset_length == Nframe * size(mueller_instru)[1]
-    
-    v=Vector{NTuple{2, NTuple{3, Float64}}}(undef, dataset_length);
-    for k=1:size(mueller_instru)[1]
-        for l=1:Nframe
-            v[Nframe*(k-1) + l] =((mueller_instru[k,1], mueller_instru[k,2], mueller_instru[k,3]),
-                                  (mueller_instru[k,4], mueller_instru[k,5], mueller_instru[k,6]));
-        end
-    end
-	return v
+"""
+
+""" field_transform
+function field_transform(A::AffineTransform2D{Float64}, epsilon, angle, center, newcenter)
+    if angle !=0
+        center_to_origin=translate(center[1]-epsilon[1],center[2]-epsilon[2], A)
+        rotation=rotate(center_to_origin,angle)
+        field_transformation =translate(rotation,-newcenter[1], -newcenter[2])
+    else
+        field_transformation =translate(A,epsilon[1]-newcenter[1]+center[1], epsilon[2]-newcenter[2]+center[2])
+	end
+	return field_transformation
 end
 
+"""
 
-function reset_instrument(V::Vector{NTuple{2, NTuple{3, T}}})  where {T <: AbstractFloat}
-    push!(Parameters, parameters_table(get_par().cols, 
-                                       get_par().rows, 
-                                       get_par().dataset_length, 
-                                       get_par().Nframe, 
-                                       get_par().Nrot, 
-                                       get_par().Nangle, 
-                                       V, 
-                                       get_par().indices, 
-                                       get_par().center, 
-                                       get_par().psf_center,
-                                       get_par().epsilon, 
-                                       get_par().derotang)); 
-
-    popfirst!(Parameters);
-end
-
-
-
-function TransRotate(A::AffineTransform2D{Float64}, EPSILON, ANGLE, CENTER, NEWCENTER)
-	return translate(rotate(translate(CENTER[1]-EPSILON[1],CENTER[2]-EPSILON[2], A), ANGLE),-NEWCENTER[1], -NEWCENTER[2])
-end
-
+""" bbox_size
 function bbox_size(inp_dims::NTuple{2,Integer},
                   A::AffineTransform2D{Float64})
                     
@@ -153,14 +110,14 @@ function bbox_size(inp_dims::NTuple{2,Integer},
 	xmax_int=ceil(Int64,xmax);
 	ymax_int=ceil(Int64,ymax);
 
-	width=xmax_int-xmin_int+1+50;
-	height=ymax_int-ymin_int+1+50;
+	width=xmax_int-xmin_int;
+	height=ymax_int-ymin_int;
     out_dims=(width, height);
 
 	return(out_dims, (xmin_int, xmax_int, ymin_int, ymax_int))
 end
 
-function set_fft_op(PSF::AbstractArray{T,2}, PSFCenter::AbstractArray{T,1}) where {T <: AbstractFloat}
+function set_fft_operator(PSF::AbstractArray{T,2}, PSFCenter::AbstractArray{T,1}) where {T <: AbstractFloat}
  	MapSize=get_par().cols[1:2];
 	MapCenter=floor.(MapSize./2).+1
 	MAP=zeros(MapSize);
@@ -304,4 +261,12 @@ function pad(X::PolarimetricMap{T}) where {T<:AbstractFloat}
                            pad(view(X.Ip,:,:)),        
                            pad(view(X.θ,:,:)))   
 end    
+
+
+function check_MSE(model, data, weights)
+	MSE = vdot(data-model, weights.*(data-model)) ;
+	N=count(weights .> 0);
+	println("MSE=$MSE, N=$N, MSE/N=$(MSE/N)");
+end
+
 

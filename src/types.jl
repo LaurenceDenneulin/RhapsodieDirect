@@ -1,14 +1,39 @@
+"""
 
+""" ObjectParameters
+struct ObjectParameters{T<:AbstractFloat, U<:Int}
+    size::NTuple{2,U}
+    center::NTuple{2,T}
+end
 
+"""
 
-struct data_table{T<:AbstractFloat,A<:FieldTransformOperator{T}} #autres types
-    data::Array{T, 2};
-    weights::Array{T, 2};
-    H::A
+""" DatasetParameters
+struct DatasetParameters{T<:AbstractFloat, U<:Int}
+    size::NTuple{2,U}
+    frames_total::U
+    frames_per_hwp_pos::U
+    hwp_cycles::U
+    center::NTuple{2,T}
 end
 
 
+"""
 
+""" FieldTransformParameters
+struct FieldTransformParameters{T<:AbstractFloat,K<:Kernel}
+    ker::K
+    field_angle::T
+    translation_left::NTuple{2,T}
+    translation_right::NTuple{2,T}
+    polarization_left::NTuple{3,T}
+    polarization_right::NTuple{3,T}
+end
+
+
+"""
+
+""" FieldTransformOperator
 struct FieldTransformOperator{T<:AbstractFloat, L<:Mapping, R<:Mapping} <: LinearMapping
     cols::NTuple{3,Int} 
     rows::NTuple{2,Int} 
@@ -23,9 +48,8 @@ function FieldTransformOperator(cols::NTuple{3,Int64},
                                 v_l::NTuple{3,T},
                                 v_r::NTuple{3,T},
                                 T_l::TwoDimensionalTransformInterpolator{T},
-                                T_r::TwoDimensionalTransformInterpolator{T},
-                                A::M) where {T <: AbstractFloat, M <: Mapping}
-    FieldTransformOperator(cols, rows, v_l, v_r, T_l*A, T_r*A)
+                                T_r::TwoDimensionalTransformInterpolator{T}) where {T <: AbstractFloat}
+    FieldTransformOperator(cols, rows, v_l, v_r, T_l, T_r)
 end
 
 function vcreate(::Type{LazyAlgebra.Direct}, A::FieldTransformOperator{T},
@@ -91,4 +115,3 @@ function apply!(α::Real,
     return dst;
 end
 
-  
