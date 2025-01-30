@@ -13,10 +13,12 @@
 
 #------------------------------------------------
 
-function data_simulator(Good_Pix, F::Vector{FieldTransformOperator}, A::Mapping, S::PolarimetricMap; ro_noise=8.5)
+function data_simulator(Good_Pix::AbstractArray{T,2},
+                        F::Vector{FieldTransformOperator{T}}, 
+                        A::Mapping, S::PolarimetricMap; ro_noise=8.5) where {T <:AbstractFloat}
    
     M=zeros(size(Good_Pix)[1],size(Good_Pix)[2],length(F))
-    CS=direct_model!(M,S,F,A);
+    @time CS=direct_model!(M,S,F,A);
     
     VAR=max.(M,zero(eltype(M))) .+ro_noise^2
 	W=Good_Pix ./ VAR
@@ -26,14 +28,15 @@ function data_simulator(Good_Pix, F::Vector{FieldTransformOperator}, A::Mapping,
 end
 
 
-function direct_model!(M::AbstractArray{T,3},
+function direct_model!(model::AbstractArray{T,3},
                         S::PolarimetricMap, 
-                        A::Mapping, 
-                        F::Vector{FieldTransformOperator}) where {T<:AbstractFloat}
+                        F::Vector{FieldTransformOperator{T}}, 
+                        A::M) where {T<:AbstractFloat,M<:Mapping}
     
-    CS = PolarimetricMap("stokes", A*S.I,A*S.Q, A*S.U);
-    for k=1:length(F)	    
-	    M[:,:,k] .= F[k] * cat(CS.I, CS.Q, CS.U, dims=3);	    
+    CS = PolarimetricMap("stokes", A*S.I,A*S.Q, A*S.U)
+    X = cat(CS.I, CS.Q, CS.U, dims=3)
+    @time @inbounds for k=1:length(F)	 
+        apply!(view(model,:,:,k),F[k],X)   
 	end
     return CS
 end

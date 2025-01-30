@@ -13,51 +13,39 @@
 module RhapsodieDirect
 
     export
-        PolarimetricPixel,
-        PolarimetricMap,
-        write,
-        read,
         convert,
-        load_field_transforms,
-        data_simulator,
-        direct_model!,
         data_generator,
+        data_simulator,
+        DatasetParameters,
+        direct_model!,
+        field_transform,
+        FieldTransformOperator,
+        FieldTransformParameters,
         generate_parameters,
         get_indices_table,
-        set_default_polarisation_coefficients,
-        field_transform,
-        bbox_size,
-        set_fft_operator,
-        set_crop_operator,
-        crop,
-        pad,
-        check_MSE,
+        load_field_transforms,
         ObjectParameters,
-        DatasetParameters,
-        FieldTransformParameters,
-        FieldTransformOperator
+        PolarimetricMap,
+        PolarimetricPixel,
+        read,
+        set_default_polarisation_coefficients,
+        set_fft_operator,
+        write
 
     import Base: +, -, *, /, ==, getindex, setindex!, read, write, convert
 
-    #using SpecialFunctions
     using TwoDimensional
-    #using FFTW
+    using FFTW
     using InterpolationKernels
     using LinearInterpolators
-    #using Statistics
-    #using LinearAlgebra
     using LazyAlgebra
     import LazyAlgebra: Mapping, vcreate, vcopy, apply!
-    #using StaticArrays
     using EasyFITS
-    #using DelimitedFiles
-    #using Random
     
     include("types.jl")
-    include("Polarimetric_Parameters.jl")
+    include("polarimetric_parameters.jl")
     include("utils.jl")
     include("loaders.jl")
-    include("separable_methods.jl")
     include("datasimul_tools.jl")
 end
 

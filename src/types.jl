@@ -1,4 +1,12 @@
+const ImageInterpolator{T<:AbstractFloat, K<:Kernel{T}} = TwoDimensionalTransformInterpolator{T,K,K}
+
 """
+    ObjectParameters(size, center)
+    
+where:
+
+* `size` is the size of one map of the object
+* `center` is the center of the object. 
 
 """ ObjectParameters
 struct ObjectParameters{T<:AbstractFloat, U<:Int}
@@ -7,6 +15,13 @@ struct ObjectParameters{T<:AbstractFloat, U<:Int}
 end
 
 """
+    DatasetParameters(size, frames_total, frames_per_hwp_pos, hwp_cycles, center)
+    
+* `size` is the total size of one frame on ne camera (with both side)
+* `frames_total` is the total number of frames in the dataset
+* `frames_per_hwp_pos`is the number of frames for a given half-wave-plate (hwp) position
+* `hwp_cycles` is the number of hwp cycles
+* `center` is the center of the object in this dataset
 
 """ DatasetParameters
 struct DatasetParameters{T<:AbstractFloat, U<:Int}
@@ -19,6 +34,14 @@ end
 
 
 """
+    FieldTransformParameters(ker,field_angle, translation_left, translation_right, polarization_left, polarization_right)
+
+* `ker` is an interpolation Kernel from the package `InterpolationKernels`
+* `field_angle` is the field rotation for the given frame
+* `translation_left` is the vector of translation composed with the difference of the object_center on the left side of the camera and the dataset center.
+* `translation_right`is the vector of translation composed with the difference of the object_center on the right side of the camera and the dataset center.
+* `polarization_left` are the polarization coefficient (the three first mueller matrix coefficients) of the left side of the camera
+* `polarization_right`are the polarization coefficient (the three first mueller matrix coefficients) of the right side of the camera
 
 """ FieldTransformParameters
 struct FieldTransformParameters{T<:AbstractFloat,K<:Kernel}
@@ -32,24 +55,23 @@ end
 
 
 """
+    FieldTransformOperator
+    
+provides the linear combination of the geometrical transform and polarization coefficient, with the blurred Stokes parameters.
 
 """ FieldTransformOperator
-struct FieldTransformOperator{T<:AbstractFloat, L<:Mapping, R<:Mapping} <: LinearMapping
-    cols::NTuple{3,Int} 
-    rows::NTuple{2,Int} 
-    v_l::NTuple{3,T}
-    v_r::NTuple{3,T}
+struct FieldTransformOperator{T<:AbstractFloat, 
+                              ColType<:NTuple{3,Int},
+                              RowType<:NTuple{2,Int},
+                              P<:NTuple{3,T},
+                              L<:Mapping, 
+                              R<:Mapping} <: LinearMapping
+    cols::ColType
+    rows::RowType
+    v_l::P
+    v_r::P
     H_l::L              
     H_r::R      
-end
-
-function FieldTransformOperator(cols::NTuple{3,Int64},
-                                rows::NTuple{2,Int64},
-                                v_l::NTuple{3,T},
-                                v_r::NTuple{3,T},
-                                T_l::TwoDimensionalTransformInterpolator{T},
-                                T_r::TwoDimensionalTransformInterpolator{T}) where {T <: AbstractFloat}
-    FieldTransformOperator(cols, rows, v_l, v_r, T_l, T_r)
 end
 
 function vcreate(::Type{LazyAlgebra.Direct}, A::FieldTransformOperator{T},
@@ -67,6 +89,8 @@ function vcreate(::Type{LazyAlgebra.Adjoint}, A::FieldTransformOperator{T},
 end
 
 
+#FIXME : refactor apply! to make α, β usefull (technically dst = α.R*src + β*dst)
+
 function apply!(α::Real,
                 ::Type{LazyAlgebra.Direct},
                 R::FieldTransformOperator{T},
@@ -79,17 +103,23 @@ function apply!(α::Real,
     @assert size(dst) == R.rows
     n = R.rows[2]
     @assert iseven(n)
-
-    z_l = zeros(R.cols[1:2]);
-    z_r = zeros(R.cols[1:2]);
-    for i=1:length(R.v_l)
-        # FIXME: use Generalized Matrix-Vector Multiplication of LazyAlgebra here.
-        x_i = view(src,:,:,i)
-	z_l .+= R.v_l[i]*x_i;
-	z_r .+= R.v_r[i]*x_i;
+    # Allocating memory FIXME: find a way to calculate fully in place 
+    z = zeros(R.cols[1:2]);
+    
+    #Compute left direct model
+    @simd for i=1:length(R.v_l)
+        vupdate!(z, R.v_l[i],view(src,:,:,i)) 
     end
-    dst[:, 1:(n÷2)  ] = R.H_l*z_l;
-    dst[:, (n÷2)+1:n] = R.H_r*z_r;
+    apply!(view(dst,:, 1:(n÷2)),R.H_l,z);
+    
+    # Reset the array values to 0. (faster than allocating two different arrays)
+    vfill!(z,0.)
+    
+    # Compute right direct model
+    @simd for i=1:length(R.v_r)
+        vupdate!(z, R.v_r[i],view(src,:,:,i)) 
+    end
+    apply!(view(dst,:, (n÷2)+1:n),R.H_r,z);
     return dst
 end
 
@@ -105,13 +135,18 @@ function apply!(α::Real,
     @assert size(dst) == R.cols
     n = R.rows[2]
     @assert iseven(n)
-    y_l = R.H_l'*view(src, :, 1:(n÷2))
-    y_r = R.H_r'*view(src, :, (n÷2)+1:n)
-    for i=1:length(R.v_l)
-        #dst[:,:,i] = R.v_l[i]*y_l + R.v_r[i]*y_r;
-        # FIXME: The following should be equivalent and much faster:
-         vcombine!(view(dst,:,:,i), R.v_l[i], y_l, R.v_r[i], y_r)
+    
+  
+    y = zeros(R.cols[1:2])
+    vmul!(y, R.H_l', view(src, :, 1:(n÷2)))
+    @simd for i=1:length(R.v_l)
+         vupdate!(view(dst,:,:,i), R.v_l[i], y)
     end
+    vmul!(y, R.H_r', view(src, :, (n÷2)+1:n))
+    @simd for i=1:length(R.v_r)
+         vupdate!(view(dst,:,:,i), R.v_r[i], y)
+    end
+
     return dst;
 end
 

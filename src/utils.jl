@@ -2,33 +2,40 @@
 # utils.jl
 #
 # Provide tools to load the instrumental parameters and the 
-# calibrated data, and for the calculus of the RHAPSODIE data fidelity term. 
+# calibrated data, and for the calculus of the RHAPSODIE direct model. 
 #
 # ------------------------------------------------
 #
-# This file is part of Rhapsodie
+# This file is part of RhapsodieDirect
 #
 #
-# Copyright (c) 2017-2025 Laurence Denneulin (see LICENCE.md)
+# Copyright (c) 2025 Laurence Denneulin (see LICENCE.md)
 #
 
 #------------------------------------------------
 """
-Return the a table of indices of size 4 by N where 4 is the number of position of half wave plate (HWP) and N is the product of the number of half wave plate cycles and the number of frame per position of HWP in one cycle. For example, for a dataset with two cycles and 2 frames per position of HWP, returns:
+Return the a table of indices of size 4 by N where 4 
+is the number of position of half wave plate (HWP) 
+and N is the product of the number of half wave plate cycles 
+and the number of frame per position of HWP in one cycle. 
+For example, for a dataset with two cycles and 2 frames 
+per position of HWP, returns:
 
 1 2  9 10
 3 4 11 12
 5 6 13 14
 7 8 15 16
 
-It is usefull to generate default polarisation values and to apply the Double Difference and Double Ratio.
+It is usefull to generate default polarisation values 
+and to apply the Double Difference and Double Ratio.
 """ get_indices_table
 
-function get_indices_table(d::DatasetParameters)	
-	indices=zeros(4,d.frames_per_hwp_pos*d.hwp_cycles)
-	for i=1:4
+function get_indices_table(d::DatasetParameters;
+                           hwp_pos=4)	
+	indices=zeros(hwp_pos,d.frames_per_hwp_pos*d.hwp_cycles)
+	for i=1:hwp_pos
 		ind=repeat(range(0,
-		                 stop=4*d.frames_per_hwp_pos*(d.hwp_cycles-1),
+		                 stop=hwp_pos*d.frames_per_hwp_pos*(d.hwp_cycles-1),
 		                 length=d.hwp_cycles), inner=d.frames_per_hwp_pos) +         
 		    (d.frames_per_hwp_pos*i .-mod.(range(1,
 		                                         stop=d.frames_per_hwp_pos*d.hwp_cycles,
@@ -41,16 +48,22 @@ function get_indices_table(d::DatasetParameters)
 end
 
 """
-
+Set default polarisation coefficient for an ideal 
+optical scheme composed with a half-wave-plate, 
+oriented with an angle α, and an analyzer, 
+oriented with an angle ψ. Default is ESO/VLT-SPHERE IRDIS configuration.
+Indices can be computed using `get_indices_table`.
 """ set_default_polarisation_coefficients
-function set_default_polarisation_coefficients(indices::AbstractArray{Int64,2}; alpha=[0, pi/4, pi/8, 3*pi/8], psi=[0,pi/2])
+function set_default_polarisation_coefficients(indices::AbstractArray{Int64,2}; 
+                                               α=[0, pi/4, pi/8, 3*pi/8], 
+                                               ψ=[0,pi/2])
 	J(a)=[cos(2*a) sin(2*a); sin(2*a) -cos(2*a)]
 	P(a)=[cos(a), -sin(a)]
     v=Vector{NTuple{2, NTuple{3, Float64}}}(undef, length(indices));
 	for i=1:4
-		v1=J(alpha[i])*P(psi[1])
+		v1=J(α[i])*P(ψ[1])
 		vn1=v1[1]*v1[1]+v1[2]*v1[2]
-		v2=J(alpha[i])*P(psi[2])
+		v2=J(α[i])*P(ψ[2])
 		vn2=v2[1]*v2[1]+v2[2]*v2[2]
 		for k=1:length(indices[i,:])		
 		v[indices[i,k]] =((round(vn1/2, digits=4), 
@@ -65,21 +78,51 @@ function set_default_polarisation_coefficients(indices::AbstractArray{Int64,2}; 
 end
 
 """
-
+Returns an AffineTransform2D of either a rotation 
+followed by a center shift or only the center shift 
+if the rotation angle is 0.
 """ field_transform
-function field_transform(A::AffineTransform2D{Float64}, epsilon, angle, center, newcenter)
+function field_transform(A::AffineTransform2D{T}, 
+                         epsilon::NTuple{2,T}, 
+                         angle::T, 
+                         center::NTuple{2,T}, 
+                         newcenter::NTuple{2,T}) where {T<:AbstractFloat}
     if angle !=0
-        center_to_origin=translate(center[1]-epsilon[1],center[2]-epsilon[2], A)
-        rotation=rotate(center_to_origin,angle)
-        field_transformation =translate(rotation,-newcenter[1], -newcenter[2])
+        center_to_origin=translate(A,-center[1],-center[2])
+        rotation=rotate(angle,center_to_origin)
+        field_transformation =translate(newcenter[1]+epsilon[1], newcenter[2]+epsilon[2],rotation)
     else
-        field_transformation =translate(A,epsilon[1]-newcenter[1]+center[1], epsilon[2]-newcenter[2]+center[2])
+        field_transformation =translate(A,epsilon[1]+newcenter[1]-center[1], epsilon[2]+newcenter[2]-center[2])
 	end
 	return field_transformation
 end
 
-"""
 
+function set_fft_operator(object_parameters::ObjectParameters,
+                          psf_map::AbstractArray{T,2}, 
+                          psf_center::AbstractArray{T,1};
+                          ker = CatmullRomSpline(Float64, Flat)) where {T <: AbstractFloat}
+	#FIXME: PSF map is transformed to the same size as the object maps : the center of the psf is translated to fit the new map center. It thus involves interpolations, which doesn't seems to be a good idea. 
+	
+	resized_psf_map=zeros(object_parameters.size);
+    new_psf_center=floor.(object_parameters.size./2).+1
+	Id = AffineTransform2D{Float64}()
+	centering=translate(-(new_psf_center[1]-psf_center[1]), -(new_psf_center[2]-psf_center[2]), Id)
+
+	LazyAlgebra.apply!(resized_psf_map, ker, centering, psf_map);
+	resized_psf_map./=sum(resized_psf_map);
+	F=FFTOperator(resized_psf_map)
+	FFT=F\Diag(F*ifftshift(resized_psf_map)) .*F;
+	
+	return FFT, resized_psf_map
+end
+
+#TODO: Refactore Cropping and Padding operators using LazyAlgebra Cropping mapping.      
+
+#=      
+
+"""
+Compute the bounding box size for a given AffineTransform2D.
 """ bbox_size
 function bbox_size(inp_dims::NTuple{2,Integer},
                   A::AffineTransform2D{Float64})
@@ -117,29 +160,6 @@ function bbox_size(inp_dims::NTuple{2,Integer},
 	return(out_dims, (xmin_int, xmax_int, ymin_int, ymax_int))
 end
 
-function set_fft_operator(PSF::AbstractArray{T,2}, PSFCenter::AbstractArray{T,1}) where {T <: AbstractFloat}
- 	MapSize=get_par().cols[1:2];
-	MapCenter=floor.(MapSize./2).+1
-	MAP=zeros(MapSize);
-	ker = LinearInterpolators.CatmullRomSpline(Float64, LinearInterpolators.Flat)
-
-	Id = AffineTransform2D{Float64}()
-	Recentering=translate(-(MapCenter[1]-PSFCenter[1]), -(MapCenter[2]-PSFCenter[2]), Id)
-
-	LazyAlgebra.apply!(MAP, ker, Recentering, PSF);
-	MAP./=sum(MAP);
-	push!(PSF_save,MAP);
-	F=FFTOperator(MAP)
-	FFT=F\Diag(F*ifftshift(MAP)) .*F;
-	
-	return FFT
-end
-
-      
-
-  
-#--------------------------------------------UTILS------------------------------------------------
-      
 function SetCropOperator()
     DSIZE=get_par().rows[1]
     MASK=ones(get_par().cols[1:2]);
@@ -268,5 +288,6 @@ function check_MSE(model, data, weights)
 	N=count(weights .> 0);
 	println("MSE=$MSE, N=$N, MSE/N=$(MSE/N)");
 end
+=#
 
 
