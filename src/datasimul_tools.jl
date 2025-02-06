@@ -27,21 +27,6 @@ function data_simulator(Good_Pix::AbstractArray{T,2},
 	return D,W,CS
 end
 
-
-function direct_model!(model::AbstractArray{T,3},
-                        S::PolarimetricMap, 
-                        F::Vector{FieldTransformOperator{T}}, 
-                        A::M) where {T<:AbstractFloat,M<:Mapping}
-    
-    CS = PolarimetricMap("stokes", A*S.I,A*S.Q, A*S.U)
-    X = cat(CS.I, CS.Q, CS.U, dims=3)
-    @time @inbounds for k=1:length(F)	 
-        apply!(view(model,:,:,k),F[k],X)   
-	end
-    return CS
-end
-    
-
 function data_generator(model::AbstractArray{T,N}, weights::AbstractArray{T,N};bad=zero(T)) where {T<:AbstractFloat,N}   
     #seed === nothing ||  Random.seed!(seed);
     

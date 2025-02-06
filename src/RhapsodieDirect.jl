@@ -44,6 +44,8 @@ module RhapsodieDirect
     
     include("types.jl")
     include("polarimetric_parameters.jl")
+    include("mappings.jl")
+    include("model.jl")
     include("utils.jl")
     include("loaders.jl")
     include("datasimul_tools.jl")
