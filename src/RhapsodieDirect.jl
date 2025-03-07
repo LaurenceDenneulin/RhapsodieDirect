@@ -13,10 +13,14 @@
 module RhapsodieDirect
 
     export
+        apply!,
+        chi_square!,
         convert,
         data_generator,
         data_simulator,
+        Dataset,
         DatasetParameters,
+        DirectModel,
         direct_model!,
         field_transform,
         FieldTransformOperator,
@@ -30,9 +34,10 @@ module RhapsodieDirect
         read,
         set_default_polarisation_coefficients,
         set_fft_operator,
+        vcreate,
         write
 
-    import Base: +, -, *, /, ==, getindex, setindex!, read, write, convert
+    import Base: +, -, *, /, ==, getindex, setindex!, read, write, convert, copy, fill!
 
     using TwoDimensional
     using FFTW
@@ -45,7 +50,7 @@ module RhapsodieDirect
     include("types.jl")
     include("polarimetric_parameters.jl")
     include("mappings.jl")
-    include("model.jl")
+    include("methods.jl")
     include("utils.jl")
     include("loaders.jl")
     include("datasimul_tools.jl")

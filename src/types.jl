@@ -80,8 +80,14 @@ end
 TODO: documentation
 """ DirectModel
 struct DirectModel{T<:AbstractFloat, 
+                   S<:AbstractString,
+                   ColType<:NTuple{2,Int},
+                   RowType<:NTuple{3,Int},
                    PerFrameTransformsType<:Vector{FieldTransformOperator{T}},
-                   GlobalTransformsType<:Mapping}
+                   GlobalTransformsType<:Mapping} <: LinearMapping
+    cols::ColType
+    rows::RowType
+    parameter_type::S
     TR::PerFrameTransformsType               
     A::GlobalTransformsType             
 end                   
@@ -93,10 +99,10 @@ TODO: documentation
 """ Dataset
 struct Dataset{T<:AbstractFloat,
                M<:AbstractArray{T,3},
-               H<:DirectModel}
+               H<:DirectModel{T}}
                
         data::M
-        weight::M
-        direct_model::DirectModel
+        weights::M
+        direct_model::H
 end
 

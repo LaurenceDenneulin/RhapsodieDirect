@@ -18,46 +18,41 @@ const MAPDICT = Dict("stokes" => Dict(1 => :I, 2 => :Q,  3 => :U),
 #------------------------------------------------
 # Structure definition
  
-#For pixles
-struct PolarimetricPixel{T<: AbstractFloat} 
+struct PolarimetricMap{T<: AbstractFloat,
+                       M<:AbstractArray{T,2}} 
     parameter_type::AbstractString   #either "stokes", "intensities" or "mixed"
-    I::T
-    Q::T
-    U::T
-    Iu::T
-    Ip::T
-    θ::T
+    I::M
+    Q::M
+    U::M
+    Iu::M
+    Ip::M
+    θ::M
 end
 
-#For map of pixels
-struct PolarimetricMap{T<: AbstractFloat} 
-    parameter_type::AbstractString   #either "stokes", "intensities" or "mixed"
-    I::Array{T,2};
-    Q::Array{T,2};
-    U::Array{T,2};
-    Iu::Array{T,2};
-    Ip::Array{T,2};
-    θ::Array{T,2};
-end
+function PolarimetricMap{T}(parameter_type::AbstractString,        
+                            I::AbstractArray{<:Any,2},
+                            Q::AbstractArray{<:Any,2},
+                            U::AbstractArray{<:Any,2},
+                            Iu::AbstractArray{<:Any,2},
+                            Ip::AbstractArray{<:Any,2},
+                            θ::AbstractArray{<:Any,2}) where {T<:AbstractFloat}        
+    @assert size(I) == size(Q) == size(U) == size(Iu) == size(Ip) == size(θ)
+    (minimum(I) < 0) && @warn "Negative intensities in I"  
+    (minimum(Iu) < 0) && @warn "Negative intensities in Iu"  
+    (minimum(Ip) < 0) && @warn "Negative intensities in Ip"  
 
-PolarimetricMap(parameter_type::AbstractString,        
-                I::AbstractArray{T,2},
-                Q::AbstractArray{T,2},
-                U::AbstractArray{T,2},
-                Iu::AbstractArray{T,2},
-                Ip::AbstractArray{T,2},
-                θ::AbstractArray{T,2}) where {T<:AbstractFloat} =       PolarimetricMap(parameter_type,        
-                                                     convert(Array{T},I),
-                                                     convert(Array{T},Q),
-                                                     convert(Array{T},U),
-                                                     convert(Array{T},Iu),
-                                                     convert(Array{T},Ip),
-                                                     convert(Array{T},θ))
+    PolarimetricMap(parameter_type,        
+                    convert(Array{T},I),
+                    convert(Array{T},Q),
+                    convert(Array{T},U),
+                    convert(Array{T},Iu),
+                    convert(Array{T},Ip),
+                    convert(Array{T},θ))
+end
                                
 #------------------------------------------------
 # Constructors 
 """
-PolarimetricPixel(parameter_type, x) -> PolarimetricPixel
 PolarimetricMap(parameter_type, x) -> PolarimetricMap
 
 create an object of type PolarimetricParameter from either:
@@ -72,81 +67,12 @@ using Rhapsodie
 X = PolarimetricParameter(S, 'stokes');
 X.I #yields the Stokes parameter I
 X.Ip #yields the polarized intensity Ip
-X[1,1] #yields a PolarimetricPix at the CartesianIndex (1,1);
-X[1,1].I #yields the Stokes parameter I at the CartesianIndex (1,1); 
+X.I[1,1] #yields the Stokes parameter I at the CartesianIndex (1,1); 
 
 PolarimetricMap(parameter_type, n1, n2) -> PolarimetricMap
 
 yields an empty    
-"""    
-function PolarimetricPixel(parameter_type::AbstractString, 
-                         x1::T, 
-                         x2::T, 
-                         x3::T) where {T<:AbstractFloat}
-    if parameter_type == "stokes"
-        I = x1            # Stokes parameter I (total light intensity)
-        Q = x2            # Stokes parameter Q
-        U = x3            # Stokes parameter U
-        Ip = sqrt(Q^2 + U^2)    # intensity of linearly polarized light
-        Iu = I-Ip    # intensity of unpolarized light
-        θ = atan(U, Q)/2 # angle of linearly polarized light
-    elseif parameter_type == "intensities"
-        Iu = x1          # intensity of unpolarized light
-        Ip = x2          # intensity of linearly polarized light
-        θ = x3       # angle of linearly polarized light
-        I = Iu + Ip   # Stokes parameter I (total light intensity)
-        Q = Ip *cos(2*θ);    # Stokes parameter Q
-        U = Ip *sin(2*θ);    # Stokes parameter U
-    elseif parameter_type == "mixed" 
-        Iu = x1          # intensity of unpolarized light   
-        Q = x2            # Stokes parameter Q
-        U = x3            # Stokes parameter U  
-        Ip = sqrt(Q^2 + U^2)    # intensity of linearly polarized light
-        I = Iu + Ip     # Stokes parameter I (total light intensity
-        θ = atan(U, Q)/2 # angle of linearly polarized light
-    else
-        error("unkown type, only known types : stokes, intensities and mixed")
-    end
-    PolarimetricPixel(parameter_type,I,Q,U,Iu,Ip,θ)
-end
-
-function PolarimetricPixel(parameter_type::AbstractString, 
-                         x::N) where {N<:AbstractArray{Float64,1}}
-    @assert length(x) == 3 
-    PolarimetricPixel(parameter_type, 
-                    x[1],
-                    x[2],
-                    x[3]);
-end 
-
-function PolarimetricMap(x::Array{PolarimetricPixel,2}) 
-    T = Float64;
-    n1, n2 = size(x)
-    par_type=x[1].parameter_type;          
-    I = Array{T}(undef, n1, n2)    # Stokes parameter I (total light intensity)
-    Q = Array{T}(undef, n1, n2)    # Stokes parameter Q
-    U = Array{T}(undef, n1, n2)    # Stokes parameter U
-    Iu = Array{T}(undef, n1, n2)    # intensity of unpolarized light
-    Ip = Array{T}(undef, n1, n2)    # intensity of linearly polarized light
-    θ = Array{T}(undef, n1, n2) # angle of linearly polarized light
-    @inbounds for i2 in 1:n2
-        @simd for i1 in 1:n1   
-            pix= x[i1,i2];
-            if par_type == pix.parameter_type
-               I[i1,i2] = pix.I;
-               Q[i1,i2] = pix.Q;
-               U[i1,i2] = pix.U;
-               Iu[i1,i2] = pix.Iu;
-               Ip[i1,i2] = pix.Ip;
-               θ[i1,i2] = pix.θ;
-            else
-               error("polarimetric types must match")
-            end
-        end 
-    end
-    PolarimetricMap(par_type,I,Q,U,Iu,Ip,θ)
-end
-
+""" PolarimetricMap    
 function PolarimetricMap(parameter_type::AbstractString, 
                          x1::A, 
                          x2::A, 
@@ -163,7 +89,7 @@ function PolarimetricMap(parameter_type::AbstractString,
         @inbounds for i2 in 1:n2
             @simd for i1 in 1:n1
                 Ip[i1,i2] = sqrt(Q[i1,i2]^2 + U[i1,i2]^2);
-                Iu[i1,i2] = I[i1, i2]-Ip[i1,i2];
+                Iu[i1,i2] = I[i1, i2]-Ip[i1,i2]; 
                 θ[i1,i2] = atan(U[i1,i2], Q[i1,i2])/2;
             end
         end
@@ -199,7 +125,7 @@ function PolarimetricMap(parameter_type::AbstractString,
     else
         error("unkown type, only known types : stokes, intensities and mixed")
     end
-    PolarimetricMap(parameter_type,I,Q,U,Iu,Ip,θ)
+    PolarimetricMap{T}(parameter_type,I,Q,U,Iu,Ip,θ)
 end
 
 function PolarimetricMap(parameter_type::AbstractString, 
@@ -222,28 +148,61 @@ function PolarimetricMap(parameter_type::AbstractString, n1::Int, n2::Int)
                            Array{Float64,2}(undef, n1, n2))
 end
 
+function (P::PolarimetricMap)(X::PolarimetricMap)
+    P.I .= copy(X.I)
+    P.Q .= copy(X.Q)
+    P.U .= copy(X.U)
+    P.Iu .= copy(X.Iu)
+    P.Ip .= copy(X.Ip)
+    P.θ .= copy(X.θ)
+end
+
+
+"""
+    
+""" rebuild
+function rebuild(parameter_type::AbstractString,P::PolarimetricMap)
+    if parameter_type == "stokes"
+        P.Ip .= sqrt.(P.Q.^2 +P.U.^2)
+        P.Iu .= P.I - P.Ip
+        P.θ .= atan.(P.U,P.Q)/2          
+    elseif parameter_type == "intensities"
+        P.I .= P.Iu + P.Ip
+        P.Q .= P.Ip .* cos.(2*P.θ)
+        P.U .= P.Ip .* sin.(2*P.θ)
+    elseif parameter_type == "mixed" 
+        P.Ip .= sqrt.(P.Q.^2 +P.U.^2)
+        P.I .= P.Iu + P.Ip
+        P.θ .= atan.(P.U,P.Q)/2 
+    else
+        error("unkown type, only known types : stokes, intensities and mixed")
+    end
+    (minimum(I) < 0) && @warn "Negative intensities in I"  
+    (minimum(Iu) < 0) && @warn "Negative intensities in Iu"  
+    (minimum(Ip) < 0) && @warn "Negative intensities in Ip"  
+    return nothing
+end
+
+
+function (P::PolarimetricMap)(X::AbstractArray{T,3}) where {T<: AbstractFloat}
+    @inbounds for (i,map) in enumerate(P)
+        map .= copy(X[:,:,i])
+    end
+    rebuild(P.parameter_type,P)
+end
+
 #------------------------------------------------
 # Base fonction redefinitions
 
 Base.size(A::PolarimetricMap) = size(A.I)
 Base.length(A::PolarimetricMap) = 3
-Base.length(A::PolarimetricPixel) = 3
-Base.getindex(X::PolarimetricMap, i::CartesianIndex{2}) =
-     PolarimetricPixel(X.parameter_type, X.I[i], X.Q[i], X.U[i], X.Iu[i], X.Ip[i], X.θ[i])
-Base.getindex(X::PolarimetricMap, i::Int) = 
-    PolarimetricPixel(X.parameter_type, X.I[i], X.Q[i], X.U[i], X.Iu[i], X.Ip[i], X.θ[i])
-Base.getindex(X::PolarimetricMap, i::Int, j::Int) = 
-    getindex(X, CartesianIndex(i,j))
-
-function Base.setindex!(X::PolarimetricMap{Float64}, x::PolarimetricPixel{Float64}, i::Int64, j::Int64)
-    X.I[i,j]=x.I;
-    X.Q[i,j]=x.Q;
-    X.U[i,j]=x.U;
-    X.Iu[i,j]=x.Iu;
-    X.Ip[i,j]=x.Ip;
-    X.θ[i,j]=x.θ;
-end
-
+Base.copy(X::PolarimetricMap{Float64}) = PolarimetricMap(X.parameter_type, 
+                                                         copy(X.I), 
+                                                         copy(X.Q), 
+                                                         copy(X.U), 
+                                                         copy(X.Iu), 
+                                                         copy(X.Ip), 
+                                                         copy(X.θ))
 
 function get(x::PolarimetricMap{Float64}, i::Int64)
     return eval(:($(x).$(MAPDICT[x.parameter_type][i])))
@@ -257,55 +216,26 @@ function Base.iterate(x::PolarimetricMap{Float64}, state=1)
         return (get(x,state),state+1)
     end
 end
-    
 
-function +(x::PolarimetricMap, y::PolarimetricMap) 
-    if x.parameter_type != y.parameter_type
-        @warn "x.parameter_type : "*x.parameter_type*" is different of y.parameter_type : "*y.parameter_type*". The result of the sum will be of parameter_type : "*x.parameter_type*"."
-    end
-    I = x.I + y.I;
-    Q = x.Q + y.Q;
-    U = x.U + y.U;
-    Ip = sqrt.(Q.^2 + U.^2)
-    Iu = I - Ip
-    θ = atan.(U,Q)/2
-    PolarimetricMap(x.parameter_type,I,Q,U,Iu,Ip,θ)
-end                  
-
-
- function -(x::PolarimetricMap, y::PolarimetricMap) 
-    if x.parameter_type != y.parameter_type
-        @warn "x.parameter_type : "*x.parameter_type*" is different of y.parameter_type : "*y.parameter_type*". The result of the sum will be of parameter_type : "*x.parameter_type*"."
-    end
-    I = x.I - y.I;
-    Q = x.Q - y.Q;
-    U = x.U - y.U;
-    Ip = sqrt.(Q.^2 + U.^2)
-    Iu = I - Ip
-    θ = atan.(U,Q)/2
-    
-    if minimum(I) < 0
-        @warn "Negative intensities in I"
-    end   
-    PolarimetricMap(x.parameter_type,I,Q,U,Iu,Ip,θ)
+function get_stokes(x::PolarimetricMap{Float64})
+    return [x.I,x.Q,x.U]
 end
-  
- vcopy(x::PolarimetricMap) = PolarimetricMap(x.parameter_type,
-                                             x.I, 
-                                             x.Q, 
-                                             x.U,
-                                             x.Iu,
-                                             x.Ip, 
-                                             x.θ)
- function vcreate(x::PolarimetricMap)
- 
-    @assert (x.parameter_type == "stokes") | 
-            (x.parameter_type == "intensities") | 
-            (x.parameter_type == "mixed")
-     n1,n2=size(x);
-     return PolarimetricMap(x.parameter_type, n1, n2)
- end     
-                                    
+
+function get_mixed(x::PolarimetricMap{Float64})
+    return [x.Iu,x.Q,x.U]
+end
+
+function get_intensities(x::PolarimetricMap{Float64})
+    return [x.Iu,x.Ip,x.θ]
+end
+
+function Base.fill!(P::PolarimetricMap, r::Real)
+    @inbounds for (i,map) in enumerate(P)
+        map .= r
+    end
+    rebuild(P.parameter_type,P)
+end
+
  function +(x::PolarimetricMap, y::Array{T,3}) where {T<:AbstractFloat} 
     @assert size(y)[1:2] == size(x)       
     if x.parameter_type == "stokes"
@@ -331,17 +261,52 @@ end
  +(y::Array{T,3}, x::PolarimetricMap) where {T<:AbstractFloat} = x + y
  -(x::PolarimetricMap, y::Array{T,3}) where {T<:AbstractFloat} = x + (-y)
  
+
+function +(x::PolarimetricMap, y::PolarimetricMap) 
+    if x.parameter_type != y.parameter_type
+        @warn "x.parameter_type : "*x.parameter_type*" is different of y.parameter_type : "*y.parameter_type*". The result of the sum will be of parameter_type : "*x.parameter_type*"."
+    end
+    return x + convert(Array{Float64,3}, y, x.parameter_type)
+end                  
+
+
+ function -(x::PolarimetricMap, y::PolarimetricMap) 
+    if x.parameter_type != y.parameter_type
+        @warn "x.parameter_type : "*x.parameter_type*" is different of y.parameter_type : "*y.parameter_type*". The result of the sum will be of parameter_type : "*x.parameter_type*"."
+    end
+    return x - convert(Array{Float64,3}, y, x.parameter_type)
+end
+  
+ vcopy(x::PolarimetricMap) = PolarimetricMap(x.parameter_type,
+                                             x.I, 
+                                             x.Q, 
+                                             x.U,
+                                             x.Iu,
+                                             x.Ip, 
+                                             x.θ)
+ function vcreate(x::PolarimetricMap)
  
- function convert(::Type{Array{T,3}}, x::PolarimetricMap{T}) where {T <:AbstractFloat}
-     if x.parameter_type == "stokes"
+    @assert (x.parameter_type == "stokes") | 
+            (x.parameter_type == "intensities") | 
+            (x.parameter_type == "mixed")
+     n1,n2=size(x);
+     return PolarimetricMap(x.parameter_type, n1, n2)
+ end     
+                                    
+ function convert(::Type{Array{T,3}}, x::PolarimetricMap{T}, parameter_type::AbstractString) where {T <:AbstractFloat}
+     if parameter_type == "stokes"
        return cat(x.I, x.Q, x.U, dims=3)
-    elseif x.parameter_type == "intensities"
+    elseif parameter_type == "intensities"
        return cat(x.Iu, x.Ip, x.θ, dims=3)
-    elseif x.parameter_type == "mixed"
+    elseif parameter_type == "mixed"
        return cat(x.Iu, x.Q, x.U, dims=3)
     else
         error("unknown parameter type")
     end
+ end
+ 
+ function convert(::Type{Array{T,3}}, x::PolarimetricMap{T}) where {T <:AbstractFloat}
+     convert(Array{T,3},x, x.parameter_type)
  end
 
 #------------------------------------------------

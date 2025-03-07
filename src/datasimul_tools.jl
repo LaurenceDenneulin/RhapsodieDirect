@@ -18,13 +18,15 @@ function data_simulator(Good_Pix::AbstractArray{T,2},
                         A::Mapping, S::PolarimetricMap; ro_noise=8.5) where {T <:AbstractFloat}
    
     M=zeros(size(Good_Pix)[1],size(Good_Pix)[2],length(F))
-    @time CS=direct_model!(M,S,F,A);
+    H = DirectModel(size(S), size(M),S.parameter_type,F,A)
+    M = H*S
+    
     
     VAR=max.(M,zero(eltype(M))) .+ro_noise^2
 	W=Good_Pix ./ VAR
 	D=data_generator(M, W)
 	
-	return D,W,CS
+	return D,W
 end
 
 function data_generator(model::AbstractArray{T,N}, weights::AbstractArray{T,N};bad=zero(T)) where {T<:AbstractFloat,N}   

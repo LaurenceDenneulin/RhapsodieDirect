@@ -39,9 +39,14 @@ psf=readfits("data/PSF_parametered_Airy.fits");
 blur=set_fft_operator(object_params,(psf[1:end÷2,:]'), psf_center[1:2])[1];
 
 
+    
+H = DirectModel(size(S), (256,512,64),S.parameter_type,field_transforms,blur)
+H*S
+    
+
 BadPixMap=Float64.(rand(0.0:1e-16:1.0,data_params.size).< 0.9);
 
-data, weight, S_convolved=data_simulator(BadPixMap, field_transforms, blur, S);
+data, weight = data_simulator(BadPixMap, field_transforms, blur, S);
 
     writefits("test_results/DATA_$(tau)_$(data_params.size[1]).fits",
           ["TYPE" => "data"],
@@ -51,6 +56,7 @@ data, weight, S_convolved=data_simulator(BadPixMap, field_transforms, blur, S);
           mapslices(transpose,weight,dims=[1,2]), overwrite=true)
 
     write(S, "test_results/TRUE_$(tau)_$(data_params.size[1]).fits")
+    S_convolved = PolarimetricMap("stokes", cat(blur*S.I, blur*S.Q, blur*S.U, dims=3)) 
     write(S_convolved, "test_results/TRUE_convolved_$(tau)_$(data_params.size[1]).fits")
 
 
