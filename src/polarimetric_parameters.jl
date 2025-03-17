@@ -177,9 +177,9 @@ function rebuild(parameter_type::AbstractString,P::PolarimetricMap)
     else
         error("unkown type, only known types : stokes, intensities and mixed")
     end
-    (minimum(I) < 0) && @warn "Negative intensities in I"  
-    (minimum(Iu) < 0) && @warn "Negative intensities in Iu"  
-    (minimum(Ip) < 0) && @warn "Negative intensities in Ip"  
+    (minimum(P.I) < 0) && @warn "Negative intensities in I"  
+    (minimum(P.Iu) < 0) && @warn "Negative intensities in Iu"  
+    (minimum(P.Ip) < 0) && @warn "Negative intensities in Ip"  
     return nothing
 end
 
