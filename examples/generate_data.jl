@@ -38,7 +38,8 @@ psf_center=readdlm("data/PSF_centers_Airy.txt");
 psf=readfits("data/PSF_parametered_Airy.fits");
 blur=set_fft_operator(object_params,(psf[1:end÷2,:]'), psf_center[1:2])[1];
 
-
+H = DirectModel(size(S), (256,512,64),S.parameter_type,field_transforms)
+H*S
     
 H = DirectModel(size(S), (256,512,64),S.parameter_type,field_transforms,blur)
 H*S
@@ -46,7 +47,10 @@ H*S
 
 BadPixMap=Float64.(rand(0.0:1e-16:1.0,data_params.size).< 0.9);
 
-data, weight = data_simulator(BadPixMap, field_transforms, blur, S);
+data, weight = data_simulator(BadPixMap, field_transforms, S);
+
+
+data, weight = data_simulator(BadPixMap, field_transforms, S; A=blur);
 
     writefits("test_results/DATA_$(tau)_$(data_params.size[1]).fits",
           ["TYPE" => "data"],

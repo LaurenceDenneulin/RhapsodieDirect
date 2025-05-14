@@ -92,6 +92,17 @@ struct DirectModel{T<:AbstractFloat,
     A::GlobalTransformsType             
 end                   
 
+DirectModel(cols::ColType, 
+            rows::RowType, 
+            parameter_type::S,
+            TR::PerFrameTransformsType) where {T<:AbstractFloat, 
+                        S<:AbstractString,
+                        ColType<:NTuple{2,Int},
+                        RowType<:NTuple{3,Int},
+                        PerFrameTransformsType<:Vector{FieldTransformOperator{T}}} =
+                   DirectModel(cols, rows, parameter_type, TR, LazyAlgebra.Id)
+
+
 """
     Dataset
     
