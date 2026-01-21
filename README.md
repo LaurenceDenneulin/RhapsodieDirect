@@ -3,7 +3,7 @@ This package provides methods to compute the direct model in Rhapsodie. It can b
 
 Dependencies :
 
-	- `EasyFITS`
+	- `AstroFITS`
 	- `FFTW`
 	- `InterpolationKernels`
 	- `LinearInterpolators`

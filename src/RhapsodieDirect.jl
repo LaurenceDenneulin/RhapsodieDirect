@@ -45,7 +45,7 @@ module RhapsodieDirect
     using LinearInterpolators
     using LazyAlgebra
     import LazyAlgebra: Mapping, vcreate, vcopy, apply!
-    using EasyFITS
+    using AstroFITS
     
     include("types.jl")
     include("polarimetric_parameters.jl")
