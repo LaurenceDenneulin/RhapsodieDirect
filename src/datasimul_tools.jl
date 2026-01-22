@@ -18,7 +18,7 @@ function data_simulator(Good_Pix::AbstractArray{T,2},
                         S::PolarimetricMap; A::Mapping = LazyAlgebra.Id, ro_noise=8.5) where {T <:AbstractFloat}
    
     M=zeros(size(Good_Pix)[1],size(Good_Pix)[2],length(F))
-    H = DirectModel(size(S), size(M),S.parameter_type,F,A)
+    H = LinearDirectModel(size(S), size(M),S.parameter_type,F,A)
     M = H*S
     
     

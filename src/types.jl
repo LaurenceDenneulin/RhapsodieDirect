@@ -82,17 +82,19 @@ struct FieldTransformOperator{T<:AbstractFloat,
     H_r::R      
 end
 
+abstract type DirectModel <: LinearMapping end
+
 """
     DirectModel
     
 TODO: documentation
-""" DirectModel
-struct DirectModel{T<:AbstractFloat, 
+""" LinearDirectModel
+struct LinearDirectModel{T<:AbstractFloat, 
                    S<:AbstractString,
                    ColType<:NTuple{2,Int},
                    RowType<:NTuple{3,Int},
                    PerFrameTransformsType<:Vector{FieldTransformOperator{T}},
-                   GlobalTransformsType<:Mapping} <: LinearMapping
+                   GlobalTransformsType<:Mapping} <: DirectModel
     cols::ColType
     rows::RowType
     parameter_type::S
@@ -100,7 +102,7 @@ struct DirectModel{T<:AbstractFloat,
     A::GlobalTransformsType             
 end                   
 
-DirectModel(cols::ColType, 
+LinearDirectModel(cols::ColType, 
             rows::RowType, 
             parameter_type::S,
             TR::PerFrameTransformsType) where {T<:AbstractFloat, 
@@ -108,7 +110,7 @@ DirectModel(cols::ColType,
                         ColType<:NTuple{2,Int},
                         RowType<:NTuple{3,Int},
                         PerFrameTransformsType<:Vector{FieldTransformOperator{T}}} =
-                   DirectModel(cols, rows, parameter_type, TR, LazyAlgebra.Id)
+                   LinearDirectModel(cols, rows, parameter_type, TR, LazyAlgebra.Id)
 
 
 """
@@ -118,7 +120,7 @@ TODO: documentation
 """ Dataset
 struct Dataset{T<:AbstractFloat,
                M<:AbstractArray{T,3},
-               H<:DirectModel{T}}
+               H<:DirectModel}
                
         data::M
         weights::M

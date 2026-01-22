@@ -309,6 +309,20 @@ end
      convert(Array{T,3},x, x.parameter_type)
  end
 
+ function vnorm2(x::PolarimetricMap)
+    @assert (x.parameter_type == "stokes") | 
+            (x.parameter_type == "intensities") | 
+            (x.parameter_type == "mixed")
+     n1,n2=size(x);
+    if x.parameter_type == "stokes"
+        return (vdot(x.I,x.I) + vdot(x.Q,x.Q) + vdot(x.U,x.U))/3
+    elseif x.parameter_type == "intensities"
+        return (vdot(x.Iu,x.Iu) + vdot(x.Ip,x.Ip) + vdot(x.θ,x.θ))/3
+    elseif x.parameter_type == "mixed"
+        return (vdot(x.Iu,x.Iu) + vdot(x.Q,x.Q) + vdot(x.U,x.U))/3
+    end
+end
+
 #------------------------------------------------
 # Writting function to save PolarimetricMap in fits file
 """

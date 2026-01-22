@@ -25,7 +25,7 @@ per position of HWP, returns:
 3 4 11 12
 5 6 13 14
 7 8 15 16
-
+##FIXME :tabular
 It is usefull to generate default polarisation values 
 and to apply the Double Difference and Double Ratio.
 """ get_indices_table
