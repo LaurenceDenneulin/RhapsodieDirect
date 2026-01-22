@@ -101,7 +101,7 @@ end
 function set_fft_operator(object_parameters::ObjectParameters,
                           psf_map::AbstractArray{T,2}, 
                           psf_center::AbstractArray{T,1};
-                          ker = CatmullRomSpline(Float64, Flat)
+                          ker = CatmullRomSpline(Float64, Flat),
                           pad_size=3) where {T <: AbstractFloat}
 	#FIXME: PSF map is transformed to the same size as the object maps : the center of the psf is translated to fit the new map center. It thus involves interpolations, which doesn't seems to be a good idea. 
  	inpdims = object_parameters.size
