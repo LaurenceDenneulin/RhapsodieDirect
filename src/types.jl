@@ -32,6 +32,15 @@ struct DatasetParameters{T<:AbstractFloat, U<:Int}
     center::NTuple{2,T}
 end
 
+DatasetParameters(size::NTuple{2,<:Any},
+                  frames_total::Any,
+                  frames_per_hwp_pos::Any,
+                  hwp_cycles::Any,
+                  center::NTuple{2,<:Any}) = DatasetParameters(Int.(size),
+                                                                             Int(frames_total),
+                                                                       Int(frames_per_hwp_pos),
+                                                                               Int(hwp_cycles),
+                                                                                Float64.(center))
 
 """
     FieldTransformParameters(ker,field_angle, translation_left, translation_right, polarization_left, polarization_right)
@@ -52,7 +61,6 @@ struct FieldTransformParameters{T<:AbstractFloat,K<:Kernel}
     polarization_left::NTuple{3,T}
     polarization_right::NTuple{3,T}
 end
-
 
 """
     FieldTransformOperator

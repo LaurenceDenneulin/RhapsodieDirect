@@ -112,13 +112,12 @@ function apply!(α::Real,
     @assert size(src) == R.cols
     @assert size(dst) == R.rows
     x = zeros(R.cols[1],R.cols[2], length(src))
-    
     @inbounds for (i,map) in enumerate(get_stokes(src))
-        if i>1
+        #if i>1
             setindex!(x,R.A*map,:,:,i)
-        else
-            setindex!(x,map,:,:,i)
-        end
+        #else
+        #    setindex!(x,map,:,:,i)
+        #end
     end
     
     @inbounds for k=1:length(R.TR)	 
@@ -144,11 +143,11 @@ function apply!(α::Real,
         vupdate!(x,1.,y)   
 	end
     @inbounds for (i,map) in enumerate(get_stokes(dst))
-        if i>1
+        #if i>1
         apply!(map,R.A', x[:,:,i])
-        else
-        vcopy!(map,x[:,:,i])
-        end
+        #else
+        #vcopy!(map,x[:,:,i])
+        #end
     end
     rebuild("stokes",dst)
     return dst;
