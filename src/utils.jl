@@ -101,18 +101,21 @@ end
 function set_fft_operator(object_parameters::ObjectParameters,
                           psf_map::AbstractArray{T,2}, 
                           psf_center::AbstractArray{T,1};
-                          ker = CatmullRomSpline(Float64, Flat)) where {T <: AbstractFloat}
+                          ker = CatmullRomSpline(Float64, Flat)
+                          pad_size=3) where {T <: AbstractFloat}
 	#FIXME: PSF map is transformed to the same size as the object maps : the center of the psf is translated to fit the new map center. It thus involves interpolations, which doesn't seems to be a good idea. 
-	
-	resized_psf_map=zeros(object_parameters.size);
-    new_psf_center=floor.(object_parameters.size./2).+1
+ 	inpdims = object_parameters.size
+	outdims = inpdims .+ pad_size
+	P = ZeroPaddingOperator(outdims, inpdims)
+	resized_psf_map=zeros(outdims);
+    new_psf_center=floor.(outdims./2).+1
 	Id = AffineTransform2D{Float64}()
 	centering=translate(-(new_psf_center[1]-psf_center[1]), -(new_psf_center[2]-psf_center[2]), Id)
 
 	LazyAlgebra.apply!(resized_psf_map, ker, centering, psf_map);
 	resized_psf_map./=sum(resized_psf_map);
 	F=FFTOperator(resized_psf_map)
-	FFT=F\Diag(F*ifftshift(resized_psf_map)) .*F;
+	FFT=P' * F\Diag(F*ifftshift(resized_psf_map)) .*F * P;
 	
 	return FFT, resized_psf_map
 end
