@@ -309,7 +309,7 @@ end
      convert(Array{T,3},x, x.parameter_type)
  end
 
- function vnorm2(x::PolarimetricMap)
+ function vnorm2(x::PolarimetricMap{T}) where {T <:AbstractFloat}
     @assert (x.parameter_type == "stokes") | 
             (x.parameter_type == "intensities") | 
             (x.parameter_type == "mixed")

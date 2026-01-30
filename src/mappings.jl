@@ -77,7 +77,7 @@ function apply!(α::Real,
     return dst;
 end
 
-# DirectModel mapping
+# LinearDirectModel mapping
 
 function vcreate(::Type{LazyAlgebra.Direct}, A::LinearDirectModel{T},
                  x::PolarimetricMap{T}, scratch::Bool = false) where {T <: AbstractFloat}
@@ -150,6 +150,6 @@ function apply!(α::Real,
         #end
     end
     rebuild("stokes",dst)
-    return dst;
+    return dst
 end
 

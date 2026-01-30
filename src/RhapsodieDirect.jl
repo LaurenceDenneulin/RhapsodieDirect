@@ -32,6 +32,7 @@ module RhapsodieDirect
         ObjectParameters,
         PolarimetricMap,
         PolarimetricPixel,
+        pre_processing,
         read,
         set_default_polarisation_coefficients,
         set_fft_operator,

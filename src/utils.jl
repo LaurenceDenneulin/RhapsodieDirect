@@ -120,6 +120,81 @@ function set_fft_operator(object_parameters::ObjectParameters,
 	return FFT, resized_psf_map
 end
 
+"""
+    pre_processing(data,weights,object_params,data_params,field_params)
+    
+do the pre_processing of data to apply separable reconstruction methods (rotation and recentering of each left and right image).
+
+""" pre_processing
+function pre_processing(data::Array{Float64,3}, 
+                        weights::Array{Float64,3},
+                        object_params::ObjectParameters,
+                        data_params::DatasetParameters,
+                        field_params::Vector{FieldTransformParameters})
+    Id = AffineTransform2D{Float64}()
+    input_size=(data_params.size[1], data_params.size[2]÷2)
+    output_size= object_params.size
+    data_cube = zeros(object_params.size[1],object_params.size[2], data_params.frames_total,2)
+    weights_cube = zeros(object_params.size[1], object_params.size[2], data_params.frames_total,2)
+# Pre processing
+    for k=1:data_params.frames_total
+        #Interpolation of defective pixels
+        d=data[:,:,k]
+        w=weights[:,:,k]
+        if sum(w) !=0.0  
+            for j=2:data_params.size[2]-1
+                for i=2:data_params.size[1]-1            
+                    if w[i,j] == 0.
+                        d[i,j] = (d[i-1, j] +d[i+1, j] +
+                                  d[i, j-1] + d[i, j+1]) /
+                                 ((d[i-1, j] !=0) + (d[i+1, j]!=0) + 
+                                  (d[i, j-1]!=0) + (d[i, j+1]!=0))
+                      
+                        w[i,j] = (w[i-1, j] +w[i+1, j] + 
+                                  w[i, j-1] + w[i, j+1]) /
+                                 ((w[i-1, j] !=0) + (w[i+1, j]!=0) + 
+                                  (w[i, j-1]!=0) + (w[i, j+1]!=0))
+
+                    end
+                end
+             end
+         end
+        
+        #Set the transformations
+        T_left=field_transform(Id, 
+                               field_params[k].translation_left, 
+                               field_params[k].field_angle, 
+                               object_params.center,data_params.center) 
+        T_right=field_transform(Id, 
+                               field_params[k].translation_right, 
+                               field_params[k].field_angle, 
+                               object_params.center,data_params.center)   
+        
+    	T1=TwoDimensionalTransformInterpolator(output_size, 
+    	                                       input_size, 
+    	                                       field_params[k].ker, 
+    	                                       field_params[k].ker, 
+    	                                       T_left)
+    	T2=TwoDimensionalTransformInterpolator(output_size, 
+    	                                       input_size, 
+    	                                       field_params[k].ker, 
+    	                                       field_params[k].ker, 
+    	                                       T_right)
+    
+        dl=T1*d[:,1:end÷2]
+        dr=T2*d[:,end÷2+1:end]
+        wl=T1*w[:,1:end÷2]
+        wr=T2*w[:,end÷2+1:end]
+
+        data_cube[:,:,k,1]=dl;
+        data_cube[:,:,k,2]=dr;
+        weights_cube[:,:,k,1]=wl;
+        weights_cube[:,:,k,2]=wr;
+    end
+    return data_cube, weights_cube
+end
+
+
 #TODO: Refactore Cropping and Padding operators using LazyAlgebra Cropping mapping.      
 
 #=      
