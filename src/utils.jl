@@ -25,14 +25,14 @@ per position of HWP, returns:
 3 4 11 12
 5 6 13 14
 7 8 15 16
-##FIXME :tabular
+
 It is usefull to generate default polarisation values 
 and to apply the Double Difference and Double Ratio.
 """ get_indices_table
 
 function get_indices_table(d::DatasetParameters;
                            hwp_pos=4)	
-	indices=zeros(hwp_pos,d.frames_per_hwp_pos*d.hwp_cycles)
+	indices=zeros(Int32,hwp_pos,d.frames_per_hwp_pos*d.hwp_cycles)
 	for i=1:hwp_pos
 		ind=repeat(range(0,
 		                 stop=hwp_pos*d.frames_per_hwp_pos*(d.hwp_cycles-1),
@@ -43,7 +43,6 @@ function get_indices_table(d::DatasetParameters;
 		                                    d.frames_per_hwp_pos))
 		indices[i,:]=ind
 	end
-	indices=Int64.(indices)
 	return indices
 end
 
@@ -54,12 +53,12 @@ oriented with an angle α, and an analyzer,
 oriented with an angle ψ. Default is ESO/VLT-SPHERE IRDIS configuration.
 Indices can be computed using `get_indices_table`.
 """ set_default_polarisation_coefficients
-function set_default_polarisation_coefficients(indices::AbstractArray{Int64,2}; 
+function set_default_polarisation_coefficients(T::Type,indices::AbstractArray{Int32,2}; 
                                                α=[0, pi/4, pi/8, 3*pi/8], 
                                                ψ=[0,pi/2])
 	J(a)=[cos(2*a) sin(2*a); sin(2*a) -cos(2*a)]
 	P(a)=[cos(a), -sin(a)]
-    v=Vector{NTuple{2, NTuple{3, Float64}}}(undef, length(indices));
+    v=Vector{NTuple{2, NTuple{3, T}}}(undef, length(indices));
 	for i=1:4
 		v1=J(α[i])*P(ψ[1])
 		vn1=v1[1]*v1[1]+v1[2]*v1[2]
@@ -76,6 +75,10 @@ function set_default_polarisation_coefficients(indices::AbstractArray{Int64,2};
 	end
 	return v
 end
+
+set_default_polarisation_coefficients(indices::AbstractArray{Int32,2}; 
+                                               α=[0, pi/4, pi/8, 3*pi/8], 
+                                               ψ=[0,pi/2]) = set_default_polarisation_coefficients(Float64, indices, α=α, ψ=ψ)
 
 """
 Returns an AffineTransform2D of either a rotation 
@@ -101,99 +104,20 @@ end
 function set_fft_operator(object_parameters::ObjectParameters,
                           psf_map::AbstractArray{T,2}, 
                           psf_center::AbstractArray{T,1};
-                          ker = CatmullRomSpline(Float64, Flat),
-                          pad_size=3) where {T <: AbstractFloat}
+                          ker = CatmullRomSpline(T, Flat)) where {T <: AbstractFloat}
 	#FIXME: PSF map is transformed to the same size as the object maps : the center of the psf is translated to fit the new map center. It thus involves interpolations, which doesn't seems to be a good idea. 
- 	inpdims = object_parameters.size
-	outdims = inpdims .+ pad_size
-	P = ZeroPaddingOperator(outdims, inpdims)
-	resized_psf_map=zeros(outdims)
-    new_psf_center=floor.(outdims./2).+1
-	Id = AffineTransform2D{Float64}()
+	
+	resized_psf_map=zeros(T,object_parameters.size);
+    new_psf_center=floor.(object_parameters.size./2).+1
+	Id = AffineTransform2D{T}()
 	centering=translate(-(new_psf_center[1]-psf_center[1]), -(new_psf_center[2]-psf_center[2]), Id)
-
-	LazyAlgebra.apply!(resized_psf_map, ker, centering, psf_map)
-	resized_psf_map./=sum(resized_psf_map)
+    LazyAlgebra.apply!(resized_psf_map, ker, centering, psf_map);
+	resized_psf_map./=sum(resized_psf_map);
 	F=FFTOperator(resized_psf_map)
-	FFT=P' * (F\Diag(F*ifftshift(resized_psf_map)) .*F * P)
+	FFT=F\Diag(F*ifftshift(resized_psf_map)) .*F;
 	
 	return FFT, resized_psf_map
 end
-
-"""
-    pre_processing(data,weights,object_params,data_params,field_params)
-    
-do the pre_processing of data to apply separable reconstruction methods (rotation and recentering of each left and right image).
-
-""" pre_processing
-function pre_processing(data::Array{Float64,3}, 
-                        weights::Array{Float64,3},
-                        object_params::ObjectParameters,
-                        data_params::DatasetParameters,
-                        field_params::Vector{FieldTransformParameters})
-    Id = AffineTransform2D{Float64}()
-    input_size=(data_params.size[1], data_params.size[2]÷2)
-    output_size= object_params.size
-    data_cube = zeros(object_params.size[1],object_params.size[2], data_params.frames_total,2)
-    weights_cube = zeros(object_params.size[1], object_params.size[2], data_params.frames_total,2)
-# Pre processing
-    for k=1:data_params.frames_total
-        #Interpolation of defective pixels
-        d=data[:,:,k]
-        w=weights[:,:,k]
-        if sum(w) !=0.0  
-            for j=2:data_params.size[2]-1
-                for i=2:data_params.size[1]-1            
-                    if w[i,j] == 0.
-                        d[i,j] = (d[i-1, j] +d[i+1, j] +
-                                  d[i, j-1] + d[i, j+1]) /
-                                 ((d[i-1, j] !=0) + (d[i+1, j]!=0) + 
-                                  (d[i, j-1]!=0) + (d[i, j+1]!=0))
-                      
-                        w[i,j] = (w[i-1, j] +w[i+1, j] + 
-                                  w[i, j-1] + w[i, j+1]) /
-                                 ((w[i-1, j] !=0) + (w[i+1, j]!=0) + 
-                                  (w[i, j-1]!=0) + (w[i, j+1]!=0))
-
-                    end
-                end
-             end
-         end
-        
-        #Set the transformations
-        T_left=field_transform(Id, 
-                               field_params[k].translation_left, 
-                               field_params[k].field_angle, 
-                               object_params.center,data_params.center) 
-        T_right=field_transform(Id, 
-                               field_params[k].translation_right, 
-                               field_params[k].field_angle, 
-                               object_params.center,data_params.center)   
-        
-    	T1=TwoDimensionalTransformInterpolator(output_size, 
-    	                                       input_size, 
-    	                                       field_params[k].ker, 
-    	                                       field_params[k].ker, 
-    	                                       T_left)
-    	T2=TwoDimensionalTransformInterpolator(output_size, 
-    	                                       input_size, 
-    	                                       field_params[k].ker, 
-    	                                       field_params[k].ker, 
-    	                                       T_right)
-    
-        dl=T1*d[:,1:end÷2]
-        dr=T2*d[:,end÷2+1:end]
-        wl=T1*w[:,1:end÷2]
-        wr=T2*w[:,end÷2+1:end]
-
-        data_cube[:,:,k,1]=dl;
-        data_cube[:,:,k,2]=dr;
-        weights_cube[:,:,k,1]=wl;
-        weights_cube[:,:,k,2]=wr;
-    end
-    return data_cube, weights_cube
-end
-
 
 #TODO: Refactore Cropping and Padding operators using LazyAlgebra Cropping mapping.      
 

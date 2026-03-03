@@ -21,7 +21,6 @@ module RhapsodieDirect
         Dataset,
         DatasetParameters,
         DirectModel,
-        LinearDirectModel,
         direct_model!,
         field_transform,
         FieldTransformOperator,
@@ -32,12 +31,10 @@ module RhapsodieDirect
         ObjectParameters,
         PolarimetricMap,
         PolarimetricPixel,
-        pre_processing,
         read,
         set_default_polarisation_coefficients,
         set_fft_operator,
         vcreate,
-        vnorm2,
         write
 
     import Base: +, -, *, /, ==, getindex, setindex!, read, write, convert, copy, fill!
@@ -47,7 +44,7 @@ module RhapsodieDirect
     using InterpolationKernels
     using LinearInterpolators
     using LazyAlgebra
-    import LazyAlgebra: Mapping, vcreate, vcopy, vnorm2, apply!
+    import LazyAlgebra: Mapping, vcreate, vcopy, apply!
     using AstroFITS
     
     include("types.jl")

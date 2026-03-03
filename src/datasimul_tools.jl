@@ -15,12 +15,11 @@
 
 function data_simulator(Good_Pix::AbstractArray{T,2},
                         F::Vector{FieldTransformOperator{T}}, 
-                        S::PolarimetricMap; A::Mapping = LazyAlgebra.Id, ro_noise=8.5) where {T <:AbstractFloat}
+                        A::Mapping, S::PolarimetricMap; ro_noise=T(8.5)) where {T <:AbstractFloat}
    
-    M=zeros(size(Good_Pix)[1],size(Good_Pix)[2],length(F))
-    H = LinearDirectModel(size(S), size(M),S.parameter_type,F,A)
+    M=zeros(T,size(Good_Pix)[1],size(Good_Pix)[2],length(F))
+    H = DirectModel(size(S), size(M),S.parameter_type,F,A)
     M = H*S
-    
     
     VAR=max.(M,zero(eltype(M))) .+ro_noise^2
 	W=Good_Pix ./ VAR
@@ -45,12 +44,12 @@ function data_generator(model::AbstractArray{T,N}, weights::AbstractArray{T,N};b
     return data
 end
 
-function generate_parameters(parameters::ObjectParameters, tau::Float64)
-	Ip=zeros(parameters.size);
-	Iu=zeros(parameters.size);
-	θ=zeros(parameters.size);
-	STAR1=zeros(parameters.size);
-	STAR2=zeros(parameters.size);
+function generate_parameters(parameters::ObjectParameters, tau::T) where {T<:AbstractFloat}
+	Ip=zeros(T,parameters.size);
+	Iu=zeros(T,parameters.size);
+	θ=zeros(T,parameters.size);
+	STAR1=zeros(T,parameters.size);
+	STAR2=zeros(T,parameters.size);
 	
 	for i=1:parameters.size[1]
     	for j=1:parameters.size[2]

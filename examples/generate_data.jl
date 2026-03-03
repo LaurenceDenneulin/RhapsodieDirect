@@ -1,23 +1,24 @@
 using Revise
 using RhapsodieDirect
 using DelimitedFiles
-using EasyFITS
+using AstroFITS
 using InterpolationKernels
 
 if prod(readdir() .!= "test_results")     
     mkdir("test_results")
 end
+T=Float32
 
-ker=CatmullRomSpline(Float64, Flat)
-tau=0.25
-object_params=ObjectParameters((300,300),(150.,150.))
+ker=CatmullRomSpline(T, Flat)
+tau=T(0.25)
+object_params=ObjectParameters{T}((300,300),(150.,150.))
 S=generate_parameters(object_params,tau)
 
 
-data_params=DatasetParameters((256,512), 64, 2,8, (128.,128.))
+data_params=DatasetParameters((256,512), 64, 2,8, (T.(128.),T.(128.)))
 
 indices=get_indices_table(data_params)
-polar_params=set_default_polarisation_coefficients(indices)
+polar_params=set_default_polarisation_coefficients(T,indices)
 
 field_params=FieldTransformParameters[]
 for i=1:data_params.frames_total
@@ -34,23 +35,19 @@ field_transforms=load_field_transforms(object_params,
                                        field_params)
 
 	
-psf_center=readdlm("data/PSF_centers_Airy.txt");
-psf=readfits("data/PSF_parametered_Airy.fits");
+psf_center=readdlm("data/PSF_centers_Airy.txt",T);
+psf=readfits(Array{T,2},"data/PSF_parametered_Airy.fits");
 blur=set_fft_operator(object_params,(psf[1:end÷2,:]'), psf_center[1:2])[1];
 
-H = DirectModel(size(S), (256,512,64),S.parameter_type,field_transforms)
-H*S
+
     
 H = DirectModel(size(S), (256,512,64),S.parameter_type,field_transforms,blur)
-H*S
+typeof(H*S)
     
 
-BadPixMap=Float64.(rand(0.0:1e-16:1.0,data_params.size).< 0.9);
+BadPixMap=T.(rand(0.0:1e-16:1.0,data_params.size).< 0.9);
 
-data, weight = data_simulator(BadPixMap, field_transforms, S);
-
-
-data, weight = data_simulator(BadPixMap, field_transforms, S; A=blur);
+data, weight = data_simulator(BadPixMap, field_transforms, blur, S);
 
     writefits("test_results/DATA_$(tau)_$(data_params.size[1]).fits",
           ["TYPE" => "data"],

@@ -31,7 +31,7 @@ function apply!(α::Real,
     @assert iseven(n)
     fill!(dst,zero(T));
     # Allocating memory FIXME: find a way to calculate fully in place 
-    z = zeros(R.cols[1:2]);
+    z = zeros(T,R.cols[1:2]);
     
     #Compute left direct model
     @simd for i=1:length(R.v_l)
@@ -64,7 +64,7 @@ function apply!(α::Real,
     @assert iseven(n)
     fill!(dst,zero(T));
   
-    y = zeros(R.cols[1:2])
+    y = zeros(T,R.cols[1:2])
     vmul!(y, R.H_l', view(src, :, 1:(n÷2)))
     @simd for i=1:length(R.v_l)
          vupdate!(view(dst,:,:,i), R.v_l[i], y)
@@ -77,16 +77,16 @@ function apply!(α::Real,
     return dst;
 end
 
-# LinearDirectModel mapping
+# DirectModel mapping
 
-function vcreate(::Type{LazyAlgebra.Direct}, A::LinearDirectModel{T},
+function vcreate(::Type{LazyAlgebra.Direct}, A::DirectModel{T},
                  x::PolarimetricMap{T}, scratch::Bool = false) where {T <: AbstractFloat}
     @assert !Base.has_offset_axes(x)
     @assert size(x) == A.cols
     Array{T,3}(undef, A.rows)
 end
 
-function vcreate(::Type{LazyAlgebra.Adjoint}, A::LinearDirectModel{T},
+function vcreate(::Type{LazyAlgebra.Adjoint}, A::DirectModel{T},
                  x::AbstractArray{T,3}, scratch::Bool = false) where {T <: AbstractFloat}
     @assert !Base.has_offset_axes(x)
     @assert size(x) == A.rows
@@ -103,7 +103,7 @@ end
 
 function apply!(α::Real,
                 ::Type{LazyAlgebra.Direct},
-                R::LinearDirectModel{T},
+                R::DirectModel{T},
                 src::PolarimetricMap{T},
                 scratch::Bool,
                 β::Real,
@@ -111,13 +111,9 @@ function apply!(α::Real,
     @assert β==0 && α==1
     @assert size(src) == R.cols
     @assert size(dst) == R.rows
-    x = zeros(R.cols[1],R.cols[2], length(src))
+    x = zeros(T,R.cols[1],R.cols[2], length(src))
     @inbounds for (i,map) in enumerate(get_stokes(src))
-        #if i>1
-            setindex!(x,R.A*map,:,:,i)
-        #else
-        #    setindex!(x,map,:,:,i)
-        #end
+        setindex!(x,R.A*map,:,:,i)
     end
     
     @inbounds for k=1:length(R.TR)	 
@@ -128,7 +124,7 @@ end
 
 function apply!(α::Real,
                 ::Type{LazyAlgebra.Adjoint},
-                R::LinearDirectModel{T},
+                R::DirectModel{T},
                 src::AbstractArray{T,3},
                 scratch::Bool,
                 β::Real,
@@ -136,20 +132,16 @@ function apply!(α::Real,
     @assert β==0 && α==1
     @assert size(src) == R.rows
     @assert size(dst) == R.cols
-    x = zeros(R.cols[1],R.cols[2], length(dst))
-    y = zeros(R.cols[1],R.cols[2], length(dst))
+    x = zeros(T,R.cols[1],R.cols[2], length(dst))
+    y = zeros(T,R.cols[1],R.cols[2], length(dst))
     @inbounds for k=1:length(R.TR)	 
         vmul!(y, R.TR[k]', view(src,:,:,k))
         vupdate!(x,1.,y)   
 	end
     @inbounds for (i,map) in enumerate(get_stokes(dst))
-        #if i>1
         apply!(map,R.A', x[:,:,i])
-        #else
-        #vcopy!(map,x[:,:,i])
-        #end
     end
     rebuild("stokes",dst)
-    return dst
+    return dst;
 end
 

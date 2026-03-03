@@ -138,14 +138,14 @@ function PolarimetricMap(parameter_type::AbstractString,
                     copy(x[:,:,3]));
 end
 
-function PolarimetricMap(parameter_type::AbstractString, n1::Int, n2::Int)
+function PolarimetricMap{T}(parameter_type::AbstractString, n1::Int, n2::Int) where {T<:AbstractFloat}
     return PolarimetricMap(parameter_type,
-                           Array{Float64,2}(undef, n1, n2),
-                           Array{Float64,2}(undef, n1, n2),
-                           Array{Float64,2}(undef, n1, n2),
-                           Array{Float64,2}(undef, n1, n2),
-                           Array{Float64,2}(undef, n1, n2),
-                           Array{Float64,2}(undef, n1, n2))
+                           Array{T,2}(undef, n1, n2),
+                           Array{T,2}(undef, n1, n2),
+                           Array{T,2}(undef, n1, n2),
+                           Array{T,2}(undef, n1, n2),
+                           Array{T,2}(undef, n1, n2),
+                           Array{T,2}(undef, n1, n2))
 end
 
 function (P::PolarimetricMap)(X::PolarimetricMap)
@@ -196,7 +196,7 @@ end
 
 Base.size(A::PolarimetricMap) = size(A.I)
 Base.length(A::PolarimetricMap) = 3
-Base.copy(X::PolarimetricMap{Float64}) = PolarimetricMap(X.parameter_type, 
+Base.copy(X::PolarimetricMap{T}) where {T<:AbstractFloat} = PolarimetricMap(X.parameter_type, 
                                                          copy(X.I), 
                                                          copy(X.Q), 
                                                          copy(X.U), 
@@ -204,11 +204,11 @@ Base.copy(X::PolarimetricMap{Float64}) = PolarimetricMap(X.parameter_type,
                                                          copy(X.Ip), 
                                                          copy(X.θ))
 
-function get(x::PolarimetricMap{Float64}, i::Int64)
+function get(x::PolarimetricMap{T}, i::Int64) where {T<:AbstractFloat}
     return eval(:($(x).$(MAPDICT[x.parameter_type][i])))
 end
 
-function Base.iterate(x::PolarimetricMap{Float64}, state=1)
+function Base.iterate(x::PolarimetricMap{T}, state=1) where {T<:AbstractFloat}
     n = length(x)
     if state > length(x)
         return nothing
@@ -217,15 +217,15 @@ function Base.iterate(x::PolarimetricMap{Float64}, state=1)
     end
 end
 
-function get_stokes(x::PolarimetricMap{Float64})
+function get_stokes(x::PolarimetricMap{T}) where {T<:AbstractFloat}
     return [x.I,x.Q,x.U]
 end
 
-function get_mixed(x::PolarimetricMap{Float64})
+function get_mixed(x::PolarimetricMap{T}) where {T<:AbstractFloat}
     return [x.Iu,x.Q,x.U]
 end
 
-function get_intensities(x::PolarimetricMap{Float64})
+function get_intensities(x::PolarimetricMap{T}) where {T<:AbstractFloat}
     return [x.Iu,x.Ip,x.θ]
 end
 
@@ -262,19 +262,19 @@ end
  -(x::PolarimetricMap, y::Array{T,3}) where {T<:AbstractFloat} = x + (-y)
  
 
-function +(x::PolarimetricMap, y::PolarimetricMap) 
+function +(x::PolarimetricMap{T1}, y::PolarimetricMap{T2}) where {T1<:AbstractFloat,T2<:AbstractFloat} 
     if x.parameter_type != y.parameter_type
         @warn "x.parameter_type : "*x.parameter_type*" is different of y.parameter_type : "*y.parameter_type*". The result of the sum will be of parameter_type : "*x.parameter_type*"."
     end
-    return x + convert(Array{Float64,3}, y, x.parameter_type)
+    return x + convert(Array{T1,3}, y, x.parameter_type)
 end                  
 
 
- function -(x::PolarimetricMap, y::PolarimetricMap) 
+ function -(x::PolarimetricMap{T1}, y::PolarimetricMap{T2}) where {T1<:AbstractFloat,T2<:AbstractFloat} 
     if x.parameter_type != y.parameter_type
         @warn "x.parameter_type : "*x.parameter_type*" is different of y.parameter_type : "*y.parameter_type*". The result of the sum will be of parameter_type : "*x.parameter_type*"."
     end
-    return x - convert(Array{Float64,3}, y, x.parameter_type)
+    return x - convert(Array{T1,3}, y, x.parameter_type)
 end
   
  vcopy(x::PolarimetricMap) = PolarimetricMap(x.parameter_type,
@@ -309,20 +309,6 @@ end
      convert(Array{T,3},x, x.parameter_type)
  end
 
- function vnorm2(x::PolarimetricMap{T}) where {T <:AbstractFloat}
-    @assert (x.parameter_type == "stokes") | 
-            (x.parameter_type == "intensities") | 
-            (x.parameter_type == "mixed")
-     n1,n2=size(x);
-    if x.parameter_type == "stokes"
-        return (vdot(x.I,x.I) + vdot(x.Q,x.Q) + vdot(x.U,x.U))/3
-    elseif x.parameter_type == "intensities"
-        return (vdot(x.Iu,x.Iu) + vdot(x.Ip,x.Ip) + vdot(x.θ,x.θ))/3
-    elseif x.parameter_type == "mixed"
-        return (vdot(x.Iu,x.Iu) + vdot(x.Q,x.Q) + vdot(x.U,x.U))/3
-    end
-end
-
 #------------------------------------------------
 # Writting function to save PolarimetricMap in fits file
 """
@@ -351,9 +337,9 @@ create an object of type PolarimetricMap from a fits file with:
 """
 
 
-function read(parameter_type::AbstractString, filename::AbstractString)
+function read(T::Type{ST},parameter_type::AbstractString, filename::AbstractString) where {ST<:AbstractFloat}
     X=readfits(filename);
-    return PolarimetricMap(parameter_type, 
+    return PolarimetricMap{T}(parameter_type, 
                            view(X,:,:,4)', 
                            view(X,:,:,5)', 
                            view(X,:,:,6)', 
@@ -361,4 +347,10 @@ function read(parameter_type::AbstractString, filename::AbstractString)
                            view(X,:,:,2)', 
                            view(X,:,:,3)')
 end
+
+read(parameter_type::AbstractString, 
+     filename::AbstractString) = read(Float64,
+                                      parameter_type::AbstractString, 
+                                      filename::AbstractString)
+
 

@@ -1,10 +1,10 @@
 function load_field_transforms(object::ObjectParameters,
-                           data::DatasetParameters,
-                           parameters::Vector{FieldTransformParameters})
+                           data::DatasetParameters{T},
+                           parameters::Vector{FieldTransformParameters}) where {T<:AbstractFloat}
     @assert data.frames_total == length(parameters)
                            
-    Id = AffineTransform2D{Float64}()
-    field_transforms=Vector{FieldTransformOperator{Float64}}()
+    Id = AffineTransform2D{T}()
+    field_transforms=Vector{FieldTransformOperator{T}}()
     
     for k=1:data.frames_total
         T_left=field_transform(Id, 

@@ -14,6 +14,8 @@ struct ObjectParameters{T<:AbstractFloat, U<:Int}
     center::NTuple{2,T}
 end
 
+ObjectParameters{T}(size::NTuple{2,U},center::NTuple{2,Real}) where {T<:AbstractFloat, U<:Int} = ObjectParameters(size, convert(NTuple{2,T},center))
+
 """
     DatasetParameters(size, frames_total, frames_per_hwp_pos, hwp_cycles, center)
     
@@ -32,15 +34,6 @@ struct DatasetParameters{T<:AbstractFloat, U<:Int}
     center::NTuple{2,T}
 end
 
-DatasetParameters(size::NTuple{2,<:Any},
-                  frames_total::Any,
-                  frames_per_hwp_pos::Any,
-                  hwp_cycles::Any,
-                  center::NTuple{2,<:Any}) = DatasetParameters(Int.(size),
-                                                                             Int(frames_total),
-                                                                       Int(frames_per_hwp_pos),
-                                                                               Int(hwp_cycles),
-                                                                                Float64.(center))
 
 """
     FieldTransformParameters(ker,field_angle, translation_left, translation_right, polarization_left, polarization_right)
@@ -52,6 +45,8 @@ DatasetParameters(size::NTuple{2,<:Any},
 * `polarization_left` are the polarization coefficient (the three first mueller matrix coefficients) of the left side of the camera
 * `polarization_right`are the polarization coefficient (the three first mueller matrix coefficients) of the right side of the camera
 
+If the floating types are not the same throught the arguments, it will be converted tou eltype(ker).
+
 """ FieldTransformParameters
 struct FieldTransformParameters{T<:AbstractFloat,K<:Kernel}
     ker::K
@@ -61,6 +56,23 @@ struct FieldTransformParameters{T<:AbstractFloat,K<:Kernel}
     polarization_left::NTuple{3,T}
     polarization_right::NTuple{3,T}
 end
+
+function FieldTransformParameters(ker::Kernel,
+                         field_angle::Real,
+                         translation_left::NTuple{2,Real},
+                         translation_right::NTuple{2,Real},
+                         polarization_left::NTuple{3,Real},
+                         polarization_right::NTuple{3,Real})
+                         
+    T = eltype(ker)
+    return FieldTransformParameters(ker,
+                                    T(field_angle),
+                                    convert(NTuple{2,T},translation_left),
+                                    convert(NTuple{2,T},translation_right),
+                                    convert(NTuple{3,T},polarization_left),
+                                    convert(NTuple{3,T},polarization_right))
+end
+
 
 """
     FieldTransformOperator
@@ -82,36 +94,23 @@ struct FieldTransformOperator{T<:AbstractFloat,
     H_r::R      
 end
 
-abstract type DirectModel <: LinearMapping end
-
 """
     DirectModel
     
 TODO: documentation
-""" LinearDirectModel
-struct LinearDirectModel{T<:AbstractFloat, 
+""" DirectModel
+struct DirectModel{T<:AbstractFloat, 
                    S<:AbstractString,
                    ColType<:NTuple{2,Int},
                    RowType<:NTuple{3,Int},
                    PerFrameTransformsType<:Vector{FieldTransformOperator{T}},
-                   GlobalTransformsType<:Mapping} <: DirectModel
+                   GlobalTransformsType<:Mapping} <: LinearMapping
     cols::ColType
     rows::RowType
     parameter_type::S
     TR::PerFrameTransformsType               
     A::GlobalTransformsType             
 end                   
-
-LinearDirectModel(cols::ColType, 
-            rows::RowType, 
-            parameter_type::S,
-            TR::PerFrameTransformsType) where {T<:AbstractFloat, 
-                        S<:AbstractString,
-                        ColType<:NTuple{2,Int},
-                        RowType<:NTuple{3,Int},
-                        PerFrameTransformsType<:Vector{FieldTransformOperator{T}}} =
-                   LinearDirectModel(cols, rows, parameter_type, TR, LazyAlgebra.Id)
-
 
 """
     Dataset
@@ -120,7 +119,7 @@ TODO: documentation
 """ Dataset
 struct Dataset{T<:AbstractFloat,
                M<:AbstractArray{T,3},
-               H<:DirectModel}
+               H<:DirectModel{T}}
                
         data::M
         weights::M
