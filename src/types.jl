@@ -9,12 +9,12 @@ where:
 * `center` is the center of the object. 
 
 """ ObjectParameters
-struct ObjectParameters{T<:AbstractFloat, U<:Int}
+struct ObjectParameters{T<:AbstractFloat, U<:Integer}
     size::NTuple{2,U}
     center::NTuple{2,T}
 end
 
-ObjectParameters{T}(size::NTuple{2,U},center::NTuple{2,Real}) where {T<:AbstractFloat, U<:Int} = ObjectParameters(size, convert(NTuple{2,T},center))
+ObjectParameters{T}(size::NTuple{2,U},center::NTuple{2,Real}) where {T<:AbstractFloat, U<:Integer} = ObjectParameters(size, convert(NTuple{2,T},center))
 
 """
     DatasetParameters(size, frames_total, frames_per_hwp_pos, hwp_cycles, center)
@@ -26,22 +26,23 @@ ObjectParameters{T}(size::NTuple{2,U},center::NTuple{2,Real}) where {T<:Abstract
 * `center` is the center of the object in this dataset
 
 """ DatasetParameters
-struct DatasetParameters{T<:AbstractFloat, U<:Int}
+struct DatasetParameters{T<:AbstractFloat, U<:Integer}
     size::NTuple{2,U}
     frames_total::U
     frames_per_hwp_pos::U
     hwp_cycles::U
     center::NTuple{2,T}
-    DatasetParameters{T,U}(size::NTuple{2,Real},
+end
+
+DatasetParameters{T,U}(size::NTuple{2,Real},
                   frames_total::Real,
                   frames_per_hwp_pos::Real,
                   hwp_cycles::Real,
-                  center::NTuple{2,Real}) where {T<:AbstractFloat, U<:Int} = new(convert(NTuple{2,U},size),
+                  center::NTuple{2,Real}) where {T<:AbstractFloat, U<:Integer} = DatasetParameters(convert(NTuple{2,U},size),
                                       U(frames_total),
                                       U(frames_per_hwp_pos),
                                       U(hwp_cycles),
                                       convert(NTuple{2,T},center))
-end
 
 
 """
@@ -90,8 +91,8 @@ provides the linear combination of the geometrical transform and polarization co
 
 """ FieldTransformOperator
 struct FieldTransformOperator{T<:AbstractFloat, 
-                              ColType<:NTuple{3,Int},
-                              RowType<:NTuple{2,Int},
+                              ColType<:NTuple{3,Integer},
+                              RowType<:NTuple{2,Integer},
                               P<:NTuple{3,T},
                               L<:Mapping, 
                               R<:Mapping} <: LinearMapping
@@ -110,8 +111,8 @@ TODO: documentation
 """ DirectModel
 struct DirectModel{T<:AbstractFloat, 
                    S<:AbstractString,
-                   ColType<:NTuple{2,Int},
-                   RowType<:NTuple{3,Int},
+                   ColType<:NTuple{2,Integer},
+                   RowType<:NTuple{3,Integer},
                    PerFrameTransformsType<:Vector{FieldTransformOperator{T}},
                    GlobalTransformsType<:Mapping} <: LinearMapping
     cols::ColType
