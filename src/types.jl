@@ -14,7 +14,17 @@ struct ObjectParameters{T<:AbstractFloat, U<:Integer}
     center::NTuple{2,T}
 end
 
-ObjectParameters{T}(size::NTuple{2,U},center::NTuple{2,Real}) where {T<:AbstractFloat, U<:Integer} = ObjectParameters(size, convert(NTuple{2,T},center))
+ObjectParameters{T,U}(size::NTuple{2,Real},
+                    center::NTuple{2,Real}) where {T<:AbstractFloat, 
+                                                   U<:Integer} = 
+                    ObjectParameters(convert(NTuple{2,U},size),
+                                     convert(NTuple{2,T},center))
+
+ObjectParameters{T}(size::NTuple{2,U},
+                    center::NTuple{2,Real}) where {T<:AbstractFloat, 
+                                                   U<:Integer} = 
+                    ObjectParameters(size,
+                                     convert(NTuple{2,T},center))
 
 """
     DatasetParameters(size, frames_total, frames_per_hwp_pos, hwp_cycles, center)
