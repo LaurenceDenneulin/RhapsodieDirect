@@ -77,16 +77,16 @@ function apply!(α::Real,
     return dst;
 end
 
-# DirectModel mapping
+# LinearDirectModel mapping
 
-function vcreate(::Type{LazyAlgebra.Direct}, A::DirectModel{T},
+function vcreate(::Type{LazyAlgebra.Direct}, A::LinearDirectModel{T},
                  x::PolarimetricMap{T}, scratch::Bool = false) where {T <: AbstractFloat}
     @assert !Base.has_offset_axes(x)
     @assert size(x) == A.cols
     Array{T,3}(undef, A.rows)
 end
 
-function vcreate(::Type{LazyAlgebra.Adjoint}, A::DirectModel{T},
+function vcreate(::Type{LazyAlgebra.Adjoint}, A::LinearDirectModel{T},
                  x::AbstractArray{T,3}, scratch::Bool = false) where {T <: AbstractFloat}
     @assert !Base.has_offset_axes(x)
     @assert size(x) == A.rows
@@ -103,7 +103,7 @@ end
 
 function apply!(α::Real,
                 ::Type{LazyAlgebra.Direct},
-                R::DirectModel{T},
+                R::LinearDirectModel{T},
                 src::PolarimetricMap{T},
                 scratch::Bool,
                 β::Real,
@@ -124,7 +124,7 @@ end
 
 function apply!(α::Real,
                 ::Type{LazyAlgebra.Adjoint},
-                R::DirectModel{T},
+                R::LinearDirectModel{T},
                 src::AbstractArray{T,3},
                 scratch::Bool,
                 β::Real,
@@ -142,6 +142,6 @@ function apply!(α::Real,
         apply!(map,R.A', x[:,:,i])
     end
     rebuild("stokes",dst)
-    return dst;
+    return dst
 end
 

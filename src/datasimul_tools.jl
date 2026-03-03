@@ -15,10 +15,12 @@
 
 function data_simulator(Good_Pix::AbstractArray{T,2},
                         F::Vector{FieldTransformOperator{T}}, 
-                        A::Mapping, S::PolarimetricMap; ro_noise=T(8.5)) where {T <:AbstractFloat}
+                        S::PolarimetricMap;
+                        A::Mapping = LazyAlgebra.Id, 
+                        ro_noise=T(8.5)) where {T <:AbstractFloat}
    
     M=zeros(T,size(Good_Pix)[1],size(Good_Pix)[2],length(F))
-    H = DirectModel(size(S), size(M),S.parameter_type,F,A)
+    H = LinearDirectModel(size(S), size(M),S.parameter_type,F,A)
     M = H*S
     
     VAR=max.(M,zero(eltype(M))) .+ro_noise^2
