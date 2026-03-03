@@ -132,16 +132,16 @@ end
 do the pre_processing of data to apply separable reconstruction methods (rotation and recentering of each left and right image).
 
 """ pre_processing
-function pre_processing(data::Array{Float64,3}, 
-                        weights::Array{Float64,3},
+function pre_processing(data::Array{T,3}, 
+                        weights::Array{T,3},
                         object_params::ObjectParameters,
                         data_params::DatasetParameters,
-                        field_params::Vector{FieldTransformParameters})
-    Id = AffineTransform2D{Float64}()
+                        field_params::Vector{FieldTransformParameters}) where {T<:AbstractFloat}
+    Id = AffineTransform2D{T}()
     input_size=(data_params.size[1], data_params.size[2]÷2)
     output_size= object_params.size
-    data_cube = zeros(object_params.size[1],object_params.size[2], data_params.frames_total,2)
-    weights_cube = zeros(object_params.size[1], object_params.size[2], data_params.frames_total,2)
+    data_cube = zeros(T,object_params.size[1],object_params.size[2], data_params.frames_total,2)
+    weights_cube = zeros(T,object_params.size[1], object_params.size[2], data_params.frames_total,2)
 # Pre processing
     for k=1:data_params.frames_total
         #Interpolation of defective pixels
