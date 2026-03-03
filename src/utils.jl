@@ -113,7 +113,7 @@ function set_fft_operator(object_parameters::ObjectParameters,
  	inpdims = object_parameters.size
 	outdims = inpdims .+ pad_size
 	P = ZeroPaddingOperator(outdims, inpdims)
-	resized_psf_map=zeros(outdims)
+	resized_psf_map=zeros(T,outdims)
     new_psf_center=floor.(outdims./2).+1
 	Id = AffineTransform2D{T}()
 	centering=translate(-(new_psf_center[1]-psf_center[1]), -(new_psf_center[2]-psf_center[2]), Id)
