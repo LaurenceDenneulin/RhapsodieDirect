@@ -32,18 +32,16 @@ struct DatasetParameters{T<:AbstractFloat, U<:Int}
     frames_per_hwp_pos::U
     hwp_cycles::U
     center::NTuple{2,T}
-end
-
-DatasetParameters{T,U}(size::NTuple{2,Real},
+    DatasetParameters{T,U}(size::NTuple{2,Real},
                   frames_total::Real,
                   frames_per_hwp_pos::Real,
                   hwp_cycles::Real,
-                  center::NTuple{2,Real}) where {T<:AbstractFloat, U<:Int}
-                  = DatasetParameters(convert(NTuple{2,U},size),
+                  center::NTuple{2,Real}) where {T<:AbstractFloat, U<:Int} = new(convert(NTuple{2,U},size),
                                       U(frames_total),
                                       U(frames_per_hwp_pos),
                                       U(hwp_cycles),
                                       convert(NTuple{2,T},center))
+end
 
 
 """
