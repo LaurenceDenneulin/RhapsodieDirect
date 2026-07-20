@@ -1,145 +1,83 @@
 # FieldTransformOperator mappings
-
-function vcreate(::Type{LazyAlgebra.Direct}, A::FieldTransformOperator{T},
-                 x::AbstractArray{T,3}, scratch::Bool = false) where {T <: AbstractFloat}
-    @assert !Base.has_offset_axes(x)
-    @assert size(x) == A.cols
-    Array{T,2}(undef, A.rows)
-end
-
-function vcreate(::Type{LazyAlgebra.Adjoint}, A::FieldTransformOperator{T},
-                 x::AbstractArray{T,2}, scratch::Bool = false) where {T <: AbstractFloat}
-    @assert !Base.has_offset_axes(x)
-    @assert size(x) == A.rows
-    Array{T,3}(undef, A.cols)
-end
-
-
-#FIXME : refactor apply! to make α, β usefull (technically dst = α.R*src + β*dst)
-
-function apply!(α::Real,
-                ::Type{LazyAlgebra.Direct},
+function unsafe_vmul!(α::Number,
                 R::FieldTransformOperator{T},
-                src::AbstractArray{T,3},
-                scratch::Bool,
-                β::Real,
+                src::AbstractVector{AbstractMatrix{T}},
+                β::Number,
                 dst::AbstractArray{T,2}) where {T<:AbstractFloat}
-    @assert β==0 && α==1
-    @assert size(src) == R.cols
-    @assert size(dst) == R.rows
     n = R.rows[2]
     @assert iseven(n)
-    fill!(dst,zero(T));
-    # Allocating memory FIXME: find a way to calculate fully in place 
-    z = zeros(T,R.cols[1:2]);
-    
-    #Compute left direct model
-    @simd for i=1:length(R.v_l)
-        vupdate!(z, R.v_l[i],view(src,:,:,i)) 
+    # Compute left direct model
+    z = zeros(T,R.cols[1:2])
+    for i=1:length(R.v_l)
+        vupdate!(z, α*R.v_l[i],src[i])  
+        #FIXME: update H to new API (TwoDimentionalInterpolator)
     end
-    apply!(view(dst,:, 1:(n÷2)),R.H_l,z);
-    
-    # Reset the array values to 0. (faster than allocating two different arrays)
-    vfill!(z,0.)
-    
+    vmul!(ONE, R.H_l, z,β, view(dst,:, 1:(n÷2)))
+
     # Compute right direct model
-    @simd for i=1:length(R.v_r)
-        vupdate!(z, R.v_r[i],view(src,:,:,i)) 
+    vzeros!(z)   
+    for i=1:length(R.v_r)
+        vupdate!(z, α*R.v_r[i],src[i]) 
     end
-    apply!(view(dst,:, (n÷2)+1:n),R.H_r,z);
-    return dst
+    vmul!(ONE, R.H_r, z,β, view(dst,:, (n÷2)+1:n))
+    return nothing
 end
 
-function apply!(α::Real,
-                ::Type{LazyAlgebra.Adjoint},
-                R::FieldTransformOperator{T},
+function unsafe_vmul!(α::Real,
+                R::LazyAlgebra.Adjoint{<:FieldTransformOperator{T}},
                 src::AbstractArray{T,2},
-                scratch::Bool,
                 β::Real,
-                dst::AbstractArray{T,3}) where {T<:AbstractFloat}
-    @assert β==0 && α==1
-    @assert size(src) == R.rows
-    @assert size(dst) == R.cols
-    n = R.rows[2]
+                dst::AbstractVector{AbstractMatrix{T}}) where {T<:AbstractFloat}
+    pR=parent(R)
+    n = pR.rows[2]
     @assert iseven(n)
-    fill!(dst,zero(T));
-  
-    y = zeros(T,R.cols[1:2])
-    vmul!(y, R.H_l', view(src, :, 1:(n÷2)))
-    @simd for i=1:length(R.v_l)
-         vupdate!(view(dst,:,:,i), R.v_l[i], y)
+    y = Array{T}(undef,pR.cols[1:2])
+    # Compute left adjoint model     
+    vmul!(ONE, pR.H_l', view(src, :, 1:(n÷2)), ZERO, y)
+    for i=1:length(pR.v_l)
+         vcombine!(α*pR.v_l[i],y, β, dst[i])
     end
-    vmul!(y, R.H_r', view(src, :, (n÷2)+1:n))
-    @simd for i=1:length(R.v_r)
-         vupdate!(view(dst,:,:,i), R.v_r[i], y)
+    
+    # Compute right adjoint model
+    vmul!(ONE, pR.H_r', view(src, :, (n÷2)+1:n), ZERO, y)
+    for i=1:length(pR.v_r)
+         vcombine!(α*pR.v_r[i],y, ONE, dst[i])
     end
-
-    return dst;
+    return nothing
 end
 
 # LinearDirectModel mapping
 
-function vcreate(::Type{LazyAlgebra.Direct}, A::LinearDirectModel{T},
-                 x::PolarimetricMap{T}, scratch::Bool = false) where {T <: AbstractFloat}
-    @assert !Base.has_offset_axes(x)
-    @assert size(x) == A.cols
-    Array{T,3}(undef, A.rows)
-end
-
-function vcreate(::Type{LazyAlgebra.Adjoint}, A::LinearDirectModel{T},
-                 x::AbstractArray{T,3}, scratch::Bool = false) where {T <: AbstractFloat}
-    @assert !Base.has_offset_axes(x)
-    @assert size(x) == A.rows
-    PolarimetricMap{T}(A.parameter_type,Array{T,2}(undef, A.cols),
-                                        Array{T,2}(undef, A.cols),
-                                        Array{T,2}(undef, A.cols),
-                                        Array{T,2}(undef, A.cols),
-                                        Array{T,2}(undef, A.cols),
-                                        Array{T,2}(undef, A.cols))
-end
-
-
-#FIXME : refactor apply! to make α, β usefull (technically dst = α.R*src + β*dst)
-
-function apply!(α::Real,
-                ::Type{LazyAlgebra.Direct},
+#TODO : Modify for new polarimetricmap structure
+function unsafe_vmul!(α::Real,
                 R::LinearDirectModel{T},
                 src::PolarimetricMap{T},
-                scratch::Bool,
                 β::Real,
                 dst::AbstractArray{T,3}) where {T<:AbstractFloat}
-    @assert β==0 && α==1
-    @assert size(src) == R.cols
-    @assert size(dst) == R.rows
     x = zeros(T,R.cols[1],R.cols[2], length(src))
     @inbounds for (i,map) in enumerate(get_stokes(src))
         setindex!(x,R.A*map,:,:,i)
     end
     
     @inbounds for k=1:length(R.TR)	 
-        apply!(view(dst,:,:,k),R.TR[k],x)   
+        vmul!(α,R.TR[k],x,β,view(dst,:,:,k))   
 	end
-    return dst
+    return nothing
 end
 
-function apply!(α::Real,
-                ::Type{LazyAlgebra.Adjoint},
-                R::LinearDirectModel{T},
+function unsafe_vmul!(α::Real,
+                R::LazyAlgebra.Adjoint{LinearDirectModel{T}},
                 src::AbstractArray{T,3},
-                scratch::Bool,
                 β::Real,
                 dst::PolarimetricMap{T}) where {T<:AbstractFloat}
-    @assert β==0 && α==1
-    @assert size(src) == R.rows
-    @assert size(dst) == R.cols
-    x = zeros(T,R.cols[1],R.cols[2], length(dst))
-    y = zeros(T,R.cols[1],R.cols[2], length(dst))
-    @inbounds for k=1:length(R.TR)	 
-        vmul!(y, R.TR[k]', view(src,:,:,k))
-        vupdate!(x,1.,y)   
-	end
+    pR=parent(R)
+    x = convert(dst)#zeros(T,R.cols[1],R.cols[2], length(dst))
+    vmul!(ONE, pR.TR[1]', view(src,:,:,k),β, x)
+    @inbounds for k=2:length(pR.TR)	 
+        vmul!(ONE, pR.TR[k]', view(src,:,:,k),ONE,x)
+    end
     @inbounds for (i,map) in enumerate(get_stokes(dst))
-        apply!(map,R.A', x[:,:,i])
+        vmul!(α,R.A', x[:,:,i], ZERO, map)
     end
     rebuild("stokes",dst)
     return dst

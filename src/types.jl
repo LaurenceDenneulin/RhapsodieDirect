@@ -104,8 +104,8 @@ struct FieldTransformOperator{T<:AbstractFloat,
                               ColType<:NTuple{3,Integer},
                               RowType<:NTuple{2,Integer},
                               P<:NTuple{3,T},
-                              L<:Mapping, 
-                              R<:Mapping} <: LinearMapping
+                              L<:Operator, 
+                              R<:Operator} <: Operator
     cols::ColType
     rows::RowType
     v_l::P
@@ -114,8 +114,17 @@ struct FieldTransformOperator{T<:AbstractFloat,
     H_r::R      
 end
 
+LazyAlgebra.InputShape(::Type(<:FieldTansformOperator)) = LazyAlgebra.HasInputShape{3}()
+LazyAlgebra.input_axis(A::FieldTansformOperator) = as_array_axis(A.cols)
 
-abstract type DirectModel <: LinearMapping end
+LazyAlgebra.OutputShape(::Type(<:FieldTansformOperator)) = LazyAlgebra.HasOutputShape{2}()
+LazyAlgebra.output_axis(A::FieldTansformOperator) = as_array_axis(A.rows)
+
+LazyAlgebra.OutputEltype(::Type(<:FieldTansformOperator)) = LazyAlgebra.HasOutputEltype()
+LazyAlgebra.output_eltype(::Type(<:FieldTansformOperator{T})) where {T <: AbstractFloat} = T 
+
+
+abstract type DirectModel <: Operator end
 
 """
     LinearDirectModel

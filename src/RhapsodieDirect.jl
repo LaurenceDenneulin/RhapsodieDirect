@@ -45,17 +45,18 @@ module RhapsodieDirect
     using TwoDimensional
     using FFTW
     using InterpolationKernels
-    using LinearInterpolators
+    #using LinearInterpolators
     using LazyAlgebra
-    import LazyAlgebra: Mapping, vcreate, vcopy, vnorm2, apply!
+    #import LazyAlgebra#: Mapping, vcreate, vcopy, vnorm2, apply!
     using AstroFITS
+    using TypeUtils
     
-    include("types.jl")
-    include("polarimetric_parameters.jl")
-    include("mappings.jl")
-    include("methods.jl")
-    include("utils.jl")
-    include("loaders.jl")
-    include("datasimul_tools.jl")
+    #include("types.jl")
+    #include("polarimetric_parameters.jl")
+    #include("mappings.jl")
+    #include("methods.jl")
+    #include("utils.jl")
+    #include("loaders.jl")
+    #include("datasimul_tools.jl")
 end
 

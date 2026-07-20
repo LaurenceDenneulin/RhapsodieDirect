@@ -10,69 +10,75 @@
 #
 # Copyright (c) 2017-2021 Laurence Denneulin (see LICENCE.md)
 
-# Dictionaries for parameters order depending of the type
-const MAPDICT = Dict("stokes" => Dict(1 => :I, 2 => :Q,  3 => :U),
-                      "intensities" => Dict(1 => :Iu, 2 => :Ip,  3 => :θ),
-                      "mixed" => Dict(1 => :Iu, 2 => :Q,  3 => :U))
-
+# List for parameters order depending of the type
+const ParameterTypes = ((:I,:Q,:U), #Stokes (linear)
+                        (:Iu,:Q,:U), #Mixed (not linear)
+                        (:Iu,:Ip,:θ), #Intensities (not linear)
+                        (:Iu,:Ip), #Intensities with theta fixed (linear)
+                        (:I_star,:I_disk, :Q,:U), #Stokes (linear) with ADI
+                        (:Iu_star,:Iu_disk, :Q,:U), #Mixed (not linear) with ADI
+                        (:Iu_star,:Iu_disk,:Ip,:θ), #Intensities (not linear) with ADI
+                        (:Iu_star,:Iu_disk,:Ip)) #Intensities with theta fixed (linear) with ADI
 #------------------------------------------------
-# Structure definition
- 
-struct PolarimetricMap{T<: AbstractFloat,
-                       M<:AbstractArray{T,2}} 
-    parameter_type::AbstractString   #either "stokes", "intensities" or "mixed"
-    I::M
-    Q::M
-    U::M
-    Iu::M
-    Ip::M
-    θ::M
-end
-
-function PolarimetricMap{T}(parameter_type::AbstractString,        
-                            I::AbstractArray{<:Any,2},
-                            Q::AbstractArray{<:Any,2},
-                            U::AbstractArray{<:Any,2},
-                            Iu::AbstractArray{<:Any,2},
-                            Ip::AbstractArray{<:Any,2},
-                            θ::AbstractArray{<:Any,2}) where {T<:AbstractFloat}        
-    @assert size(I) == size(Q) == size(U) == size(Iu) == size(Ip) == size(θ)
-    #(minimum(I) < 0) && @warn "Negative intensities in I"  
-    #(minimum(Iu) < 0) && @warn "Negative intensities in Iu"  
-    #(minimum(Ip) < 0) && @warn "Negative intensities in Ip"  
-
-    PolarimetricMap(parameter_type,        
-                    convert(Array{T},I),
-                    convert(Array{T},Q),
-                    convert(Array{T},U),
-                    convert(Array{T},Iu),
-                    convert(Array{T},Ip),
-                    convert(Array{T},θ))
-end
-                               
-#------------------------------------------------
-# Constructors 
 """
-PolarimetricMap(parameter_type, x) -> PolarimetricMap
+PolarimetricMap{S}(x) -> PolarimetricMap
 
-create an object of type PolarimetricParameter from either:
-- Parameters I, Q, U (i.e. parameter_type = 'stokes')
-- Parameters Iu, Ip and θ (i.e. parameter_type = 'intensities')
-- Parameters Iu, Q, U (i.e. parameter_type = 'mixed')
+create an object of type PolarimetricMap where:
+    - x is a vector of matrix
+    - S is a Tuple of Symbol indicating the type of map as in the following list : $(ParameterTypes)
 
-Each parameter can be called from the structur. For exemple with a 
-construction from Stokes parameters S=(I,Q,U):
+For exemple with a for Stokes parameters S=(I,Q,U) given as a vector of matrices:
 
 using Rhapsodie
-X = PolarimetricParameter(S, 'stokes');
+X = PolarimetricMap{(:I,:Q,:U)}(S)
 X.I #yields the Stokes parameter I
 X.Ip #yields the polarized intensity Ip
 X.I[1,1] #yields the Stokes parameter I at the CartesianIndex (1,1); 
 
-PolarimetricMap(parameter_type, n1, n2) -> PolarimetricMap
+""" PolarimetricMap   
+struct PolarimetricMap{S, T<: AbstractFloat, V<:AbstractVector{<:AbstractMatrix{T}}}
+    data::V
+    function PolarimetricMap{S}(data::AbstractVector{<:AbstractMatrix{T}}) where {S,T<:AbstractFloat}
+        S isa Tuple{Vararg{Symbol}} || error("S must be a tuple of symbols")
+        axes(data,1) == 1:length(S) || error("data and field names must have the same indices")
+        shape = axes(data[1])
+        for d in 2:length(S)
+            axes(data[d]) == shape || error("all data fields must have the same shape")
+        end
+        return new{S,T,typeof(data)}(data)
+    end
+end
 
-yields an empty    
-""" PolarimetricMap    
+@generated function Base.propertynames(x::PolarimetricMap{S}) where {S}
+    return quote
+        $(Tuple(sort([S..., :data])))
+    end
+end
+
+@inline Base.getproperty(x::PolarimetricMap, key::Symbol) = _getproperty(x, Val(key))
+
+_getproperty(x::PolarimetricMap, ::Val{:data}) = getfield(x, :data)
+_getproperty(x::PolarimetricMap, ::Val{key}) where {key} = throw(KeyError(key))
+
+# trait
+
+polarimetricfields(x::PolarimetricMap) = polarimetricfields(typeof(x))
+polarimetricfields(::Type{<:PolarimetricMap{S,T,A}}) where {S,T,A} = S
+
+#Base.eltype(x::PolarimetricMap) = polarimetricfields(typeof(x))
+Base.eltype(::Type{<:PolarimetricMap{S,T,A}}) where {S,T,A} = T
+
+for S in ParameterTypes
+    for i in 1:length(S)
+        @eval begin
+            _getproperty(x::PolarimetricMap{$S,T}, ::$(Val{S[i]})) where {T} = getfield(x, :data)[$i]
+        end
+    end
+end
+                               
+#------------------------------------------------
+# Constructors 
+ 
 function PolarimetricMap(parameter_type::AbstractString, 
                          x1::A, 
                          x2::A, 
