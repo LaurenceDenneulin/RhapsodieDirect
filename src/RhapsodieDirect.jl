@@ -52,7 +52,7 @@ module RhapsodieDirect
     using TypeUtils
     
     #include("types.jl")
-    #include("polarimetric_parameters.jl")
+    include("polarimetric_parameters.jl")
     #include("mappings.jl")
     #include("methods.jl")
     #include("utils.jl")

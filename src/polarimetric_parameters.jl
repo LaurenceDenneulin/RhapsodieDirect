@@ -49,6 +49,15 @@ struct PolarimetricMap{S, T<: AbstractFloat, V<:AbstractVector{<:AbstractMatrix{
     end
 end
 
+function PolarimetricMap{S}(data::M) where {S,T<:AbstractFloat, M<:AbstractArray{T,3}}
+    data_vect=Vector{Matrix{T}}()
+    for i=1:axes(data,3)
+        push!(data_vect, data[:,:,i])
+    end
+    PolarimetricMap{S}(data_vect);
+end
+
+
 @generated function Base.propertynames(x::PolarimetricMap{S}) where {S}
     return quote
         $(Tuple(sort([S..., :data])))
@@ -75,141 +84,46 @@ for S in ParameterTypes
         end
     end
 end
-                               
-#------------------------------------------------
-# Constructors 
+   
+_getproperty(x::PolarimetricMap{(:I,:Q,:U)}, ::Val{:Ip}) = sqrt.(x.Q.^2 + x.U.^2)   
+_getproperty(x::PolarimetricMap{(:I,:Q,:U)}, ::Val{:Iu}) = x.I - x.Ip
+_getproperty(x::PolarimetricMap{(:I,:Q,:U)}, ::Val{:θ}) = atan.(x.U, x.Q)   
+
+_getproperty(x::PolarimetricMap{(:Iu,:Ip,:θ)}, ::Val{:I}) = x.Iu + x.Ip
+_getproperty(x::PolarimetricMap{(:Iu,:Ip,:θ)}, ::Val{:Q}) = x.Ip.*cos.(2*x.θ)
+_getproperty(x::PolarimetricMap{(:Iu,:Ip,:θ)}, ::Val{:U}) = x.Ip.*sin.(2*x.θ)
  
-function PolarimetricMap(parameter_type::AbstractString, 
-                         x1::A, 
-                         x2::A, 
-                         x3::A) where {T<:AbstractFloat, A<:AbstractArray{T,2}}                   
-    n1, n2 = size(x1)
-    @assert ((n1,n2) == size(x2)) && ((n1,n2) == size(x3)) 
-        if parameter_type == "stokes"
-        I = x1            # Stokes parameter I (total light intensity)
-        Q = x2            # Stokes parameter Q
-        U = x3            # Stokes parameter U
-        Iu = Array{T}(undef, n1, n2)    # intensity of unpolarized light
-        Ip = Array{T}(undef, n1, n2)    # intensity of linearly polarized light
-        θ = Array{T}(undef, n1, n2) # angle of linearly polarized light
-        @inbounds for i2 in 1:n2
-            @simd for i1 in 1:n1
-                Ip[i1,i2] = sqrt(Q[i1,i2]^2 + U[i1,i2]^2);
-                Iu[i1,i2] = I[i1, i2]-Ip[i1,i2]; 
-                θ[i1,i2] = atan(U[i1,i2], Q[i1,i2])/2;
-            end
-        end
-    elseif parameter_type == "intensities"
-        I = Array{T}(undef, n1, n2)    # Stokes parameter I (total light intensity)
-        Q = Array{T}(undef, n1, n2)    # Stokes parameter Q
-        U = Array{T}(undef, n1, n2)    # Stokes parameter U
-        Iu = x1          # intensity of unpolarized light
-        Ip = x2          # intensity of linearly polarized light
-        θ = x3       # angle of linearly polarized light
-         @inbounds for i2 in 1:n2
-            @simd for i1 in 1:n1
-                I[i1,i2] = Iu[i1,i2] + Ip[i1,i2];
-                Q[i1,i2] = Ip[i1,i2] .*cos.(2*θ[i1,i2]);
-                U[i1,i2] = Ip[i1,i2] .*sin.(2*θ[i1,i2]);
-            end
-        end
-    elseif parameter_type == "mixed" 
-        I = Array{T}(undef, n1, n2)     # Stokes parameter I (total light intensity
-        Q = x2            # Stokes parameter Q
-        U = x3            # Stokes parameter U
-        Iu = x1          # intensity of unpolarized light     
-        Ip = Array{T}(undef, n1, n2)    # intensity of linearly polarized light
-        θ = Array{T}(undef, n1, n2) # angle of linearly polarized light
-        @inbounds for i2 in 1:n2
-            @simd for i1 in 1:n1
-                Ip[i1,i2] = sqrt(Q[i1,i2]^2 + U[i1,i2]^2);
-                I[i1,i2] = Iu[i1,i2] + Ip[i1,i2];
-                θ[i1,i2] = atan(U[i1,i2], Q[i1,i2])/2;
-            end
-        end
+_getproperty(x::PolarimetricMap{(:I_star,:I_disk,:Q,:U)}, ::Val{:Ip}) = sqrt.(x.Q.^2 + x.U.^2)
+_getproperty(x::PolarimetricMap{(:I_star,:I_disk,:Q,:U)}, ::Val{:I}) = x.I_star + x.I_disk  
+_getproperty(x::PolarimetricMap{(:I_star,:I_disk,:Q,:U)}, ::Val{:Iu_star}) = x.I_star    
+_getproperty(x::PolarimetricMap{(:I_star,:I_disk,:Q,:U)}, ::Val{:Iu}) = x.I - x.Ip 
+_getproperty(x::PolarimetricMap{(:I_star,:I_disk,:Q,:U)}, ::Val{:Iu_disk}) = x.I_disk - x.Ip
+_getproperty(x::PolarimetricMap{(:I_star,:I_disk,:Q,:U)}, ::Val{:θ}) = atan.(x.U, x.Q)   
 
-    else
-        error("unkown type, only known types : stokes, intensities and mixed")
-    end
-    PolarimetricMap{T}(parameter_type,I,Q,U,Iu,Ip,θ)
-end
-
-function PolarimetricMap(parameter_type::AbstractString, 
-                         x::Array{T,3}) where {T<:AbstractFloat}
-    n1, n2, n3 = size(x)
-    @assert n3 == 3 
-    PolarimetricMap(parameter_type, 
-                    copy(x[:,:,1]),
-                    copy(x[:,:,2]),
-                    copy(x[:,:,3]));
-end
-
-function PolarimetricMap{T}(parameter_type::AbstractString, n1::Int, n2::Int) where {T<:AbstractFloat}
-    return PolarimetricMap(parameter_type,
-                           Array{T,2}(undef, n1, n2),
-                           Array{T,2}(undef, n1, n2),
-                           Array{T,2}(undef, n1, n2),
-                           Array{T,2}(undef, n1, n2),
-                           Array{T,2}(undef, n1, n2),
-                           Array{T,2}(undef, n1, n2))
-end
-
-function (P::PolarimetricMap)(X::PolarimetricMap)
-    P.I .= copy(X.I)
-    P.Q .= copy(X.Q)
-    P.U .= copy(X.U)
-    P.Iu .= copy(X.Iu)
-    P.Ip .= copy(X.Ip)
-    P.θ .= copy(X.θ)
-end
-
-
-"""
+_getproperty(x::PolarimetricMap{(:Iu_star,:Iu_disk,:Ip,:θ)}, ::Val{:Iu}) = x.Iu_star + x.Iu_disk
+_getproperty(x::PolarimetricMap{(:Iu_star,:Iu_disk,:Ip,:θ)}, ::Val{:I}) = x.Iu + x.Ip
+_getproperty(x::PolarimetricMap{(:Iu_star,:Iu_disk,:Ip,:θ)}, ::Val{:I_star}) = x.Iu_star
+_getproperty(x::PolarimetricMap{(:Iu_star,:Iu_disk,:Ip,:θ)}, ::Val{:I_disk}) = x.Iu_disk + x.Ip
+_getproperty(x::PolarimetricMap{(:Iu_star,:Iu_disk,:Ip,:θ)}, ::Val{:Q}) = x.Ip.*cos.(2*x.θ)
+_getproperty(x::PolarimetricMap{(:Iu_star,:Iu_disk,:Ip,:θ)}, ::Val{:U}) = x.Ip.*sin.(2*x.θ)
+   
+                               
+#TODO: finish this function if interesting.
+#=
+function (P::PolarimetricMap{S1})(X::PolarimetricMap{S2})
+    @assert S1 == S2 || error("Polarimetric parameters must be of the same type")
+    P.data .= copy(X.data)
     
-""" rebuild
-function rebuild(parameter_type::AbstractString,P::PolarimetricMap)
-    if parameter_type == "stokes"
-        P.Ip .= sqrt.(P.Q.^2 +P.U.^2)
-        P.Iu .= P.I - P.Ip
-        P.θ .= atan.(P.U,P.Q)/2          
-    elseif parameter_type == "intensities"
-        P.I .= P.Iu + P.Ip
-        P.Q .= P.Ip .* cos.(2*P.θ)
-        P.U .= P.Ip .* sin.(2*P.θ)
-    elseif parameter_type == "mixed" 
-        P.Ip .= sqrt.(P.Q.^2 +P.U.^2)
-        P.I .= P.Iu + P.Ip
-        P.θ .= atan.(P.U,P.Q)/2 
-    else
-        error("unkown type, only known types : stokes, intensities and mixed")
-    end
-    #(minimum(P.I) < 0) && @warn "Negative intensities in I"  
-    #(minimum(P.Iu) < 0) && @warn "Negative intensities in Iu"  
-    #(minimum(P.Ip) < 0) && @warn "Negative intensities in Ip"  
-    return nothing
 end
-
-
-function (P::PolarimetricMap)(X::AbstractArray{T,3}) where {T<: AbstractFloat}
-    @inbounds for (i,map) in enumerate(P)
-        map .= copy(X[:,:,i])
-    end
-    rebuild(P.parameter_type,P)
-end
+=#
 
 #------------------------------------------------
 # Base fonction redefinitions
 
-Base.size(A::PolarimetricMap) = size(A.I)
-Base.length(A::PolarimetricMap) = 3
-Base.copy(X::PolarimetricMap{T}) where {T<:AbstractFloat} = PolarimetricMap(X.parameter_type, 
-                                                         copy(X.I), 
-                                                         copy(X.Q), 
-                                                         copy(X.U), 
-                                                         copy(X.Iu), 
-                                                         copy(X.Ip), 
-                                                         copy(X.θ))
-
+Base.size(A::PolarimetricMap) = size(A[1])
+Base.length(A::PolarimetricMap{S}) where {S} = length(S)
+Base.copy(X::PolarimetricMap{S}) where {S} = PolarimetricMap{S}(X.data)
+#=
 function get(x::PolarimetricMap{T}, i::Int64) where {T<:AbstractFloat}
     return eval(:($(x).$(MAPDICT[x.parameter_type][i])))
 end
@@ -328,7 +242,7 @@ function vnorm2(x::PolarimetricMap{T}) where {T <:AbstractFloat}
         return (vdot(x.Iu,x.Iu) + vdot(x.Q,x.Q) + vdot(x.U,x.U))/3
     end
 end
-
+=#
 
 #------------------------------------------------
 # Writting function to save PolarimetricMap in fits file
@@ -358,15 +272,9 @@ create an object of type PolarimetricMap from a fits file with:
 """
 
 
-function read(T::Type{ST},parameter_type::AbstractString, filename::AbstractString) where {ST<:AbstractFloat}
+function read(T::Type{ST},S, filename::AbstractString) where {ST<:AbstractFloat,S}
     X=readfits(filename);
-    return PolarimetricMap{T}(parameter_type, 
-                           view(X,:,:,4)', 
-                           view(X,:,:,5)', 
-                           view(X,:,:,6)', 
-                           view(X,:,:,1)', 
-                           view(X,:,:,2)', 
-                           view(X,:,:,3)')
+    return PolarimetricMap{S}(X)
 end
 
 read(parameter_type::AbstractString, 
